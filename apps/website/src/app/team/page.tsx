@@ -36,9 +36,18 @@ export default async function TeamPage() {
         </Link>
       </div>
 
+      <p className="max-w-2xl text-lg leading-relaxed text-on-surface-variant">
+        Medicine meets empathy here — a team united by one simple belief: every animal deserves to be seen, heard, and
+        loved like family.
+      </p>
+
       {featuredTeam.length ? (
         <section className="space-y-4">
           <h2 className="font-headline text-2xl font-bold text-on-surface">Featured team</h2>
+          <p className="max-w-xl text-on-surface-variant">
+            The faces you&apos;ll meet first — caregivers who bring patience, warmth, and steady expertise to every
+            consultation.
+          </p>
           <div className="flex flex-wrap justify-center gap-8 sm:justify-start">
             {featuredTeam.map((member) => (
               <article key={member.id} className="flex w-36 flex-col items-center text-center">
@@ -54,10 +63,6 @@ export default async function TeamPage() {
         </section>
       ) : null}
 
-      <p className="text-on-surface-variant">
-        Clinical profiles below are updated by staff in the mobile app. Homepage featured photos are managed in website
-        admin → Our team.
-      </p>
       <div className="grid gap-6 md:grid-cols-2">
         {staff.map((member) => (
           <article

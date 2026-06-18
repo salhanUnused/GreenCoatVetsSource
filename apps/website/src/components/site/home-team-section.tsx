@@ -11,8 +11,9 @@ export function HomeTeamSection({ members }: { members: MarketingTeamMember[] })
           <div className="space-y-3">
             <p className="font-label text-sm font-bold uppercase tracking-widest text-primary">Our team</p>
             <h2 className="font-headline text-3xl font-extrabold text-on-surface sm:text-4xl">People who care for your pets</h2>
-            <p className="max-w-2xl text-on-surface-variant">
-              Compassionate veterinarians and support staff dedicated to happy, healthy animals.
+            <p className="max-w-2xl text-lg leading-relaxed text-on-surface-variant">
+              Behind every wag, purr, and quiet recovery is a team that shows up with heart — curious minds, gentle hands,
+              and a genuine love for the bond you share with your pet.
             </p>
           </div>
           <Link

@@ -531,3 +531,119 @@ export async function recordSitemapPingAction() {
   revalidatePath("/admin/seo");
   redirect("/admin/seo?pinged=1");
 }
+
+const TEAM_PHOTO_BUCKET = "clinic-assets";
+
+async function uploadMarketingTeamPhoto(memberId: string, file: File): Promise<string> {
+  if (!file.size) throw new Error("Photo is required.");
+  if (!file.type.startsWith("image/")) throw new Error("Photo must be an image file.");
+  if (file.size > 5 * 1024 * 1024) throw new Error("Photo must be under 5 MB.");
+
+  const supabase = await requireMarketingManagerClient();
+  const ext = file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
+  const path = `marketing/team/${memberId}.${ext}`;
+  const bytes = Buffer.from(await file.arrayBuffer());
+
+  const { error: uploadError } = await supabase.storage.from(TEAM_PHOTO_BUCKET).upload(path, bytes, {
+    contentType: file.type,
+    upsert: true,
+  });
+  if (uploadError) throw new Error(uploadError.message);
+
+  const { data } = supabase.storage.from(TEAM_PHOTO_BUCKET).getPublicUrl(path);
+  return data.publicUrl;
+}
+
+export async function addMarketingTeamMember(formData: FormData) {
+  try {
+    const supabase = await requireMarketingManagerClient();
+    const full_name = (formData.get("full_name") as string | null)?.trim() ?? "";
+    const role_title = (formData.get("role_title") as string | null)?.trim() || null;
+    const sort_order = Number(formData.get("sort_order") || 0);
+    const photo = formData.get("photo");
+
+    if (!full_name) {
+      redirect("/admin/team?error=Name%20is%20required.");
+    }
+    if (!(photo instanceof File) || photo.size === 0) {
+      redirect("/admin/team?error=Photo%20is%20required.");
+    }
+
+    const memberId = crypto.randomUUID();
+    const image_url = await uploadMarketingTeamPhoto(memberId, photo);
+
+    const { error } = await supabase.from("marketing_team_members").insert({
+      id: memberId,
+      full_name,
+      role_title,
+      image_url,
+      sort_order: Number.isFinite(sort_order) ? sort_order : 0,
+      is_active: formData.get("is_active") === "on",
+    });
+    if (error) throw new Error(error.message);
+
+    revalidatePath("/", "layout");
+    revalidatePath("/");
+    revalidatePath("/team");
+    revalidatePath("/admin/team");
+    redirect("/admin/team?saved=1");
+  } catch (e) {
+    redirect(`/admin/team?error=${encodeURIComponent(e instanceof Error ? e.message : "Could not add team member.")}`);
+  }
+}
+
+export async function updateMarketingTeamMember(formData: FormData) {
+  try {
+    const supabase = await requireMarketingManagerClient();
+    const id = (formData.get("id") as string | null)?.trim() ?? "";
+    const full_name = (formData.get("full_name") as string | null)?.trim() ?? "";
+    const role_title = (formData.get("role_title") as string | null)?.trim() || null;
+    const sort_order = Number(formData.get("sort_order") || 0);
+    const photo = formData.get("photo");
+
+    if (!id || !full_name) {
+      redirect("/admin/team?error=Missing%20required%20fields.");
+    }
+
+    const payload: Record<string, unknown> = {
+      full_name,
+      role_title,
+      sort_order: Number.isFinite(sort_order) ? sort_order : 0,
+      is_active: formData.get("is_active") === "on",
+    };
+
+    if (photo instanceof File && photo.size > 0) {
+      payload.image_url = await uploadMarketingTeamPhoto(id, photo);
+    }
+
+    const { error } = await supabase.from("marketing_team_members").update(payload).eq("id", id);
+    if (error) throw new Error(error.message);
+
+    revalidatePath("/", "layout");
+    revalidatePath("/");
+    revalidatePath("/team");
+    revalidatePath("/admin/team");
+    redirect("/admin/team?saved=1");
+  } catch (e) {
+    redirect(`/admin/team?error=${encodeURIComponent(e instanceof Error ? e.message : "Could not update team member.")}`);
+  }
+}
+
+export async function deleteMarketingTeamMember(formData: FormData) {
+  const supabase = await requireMarketingManagerClient();
+  const id = (formData.get("id") as string | null)?.trim() ?? "";
+  if (!id) {
+    redirect("/admin/team?error=Missing%20member%20id.");
+  }
+
+  const { error } = await supabase.from("marketing_team_members").delete().eq("id", id);
+  if (error) {
+    redirect(`/admin/team?error=${encodeURIComponent(error.message)}`);
+  }
+
+  revalidatePath("/", "layout");
+  revalidatePath("/");
+  revalidatePath("/team");
+  revalidatePath("/admin/team");
+  redirect("/admin/team?deleted=1");
+}

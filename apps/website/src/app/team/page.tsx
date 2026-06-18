@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { resolveClinic } from "@/lib/clinic/resolve-clinic";
 import { getPublicStaffForClinic } from "@/lib/clinic/public-staff";
+import { getMarketingTeamMembers } from "@/lib/marketing/get-team-members";
 import { clinicMetadata } from "@/lib/seo/clinic-metadata";
 
 const ROLE_LABEL: Record<string, string> = {
@@ -21,7 +22,10 @@ export async function generateMetadata() {
 
 export default async function TeamPage() {
   const clinic = await resolveClinic();
-  const staff = await getPublicStaffForClinic(clinic.id);
+  const [staff, featuredTeam] = await Promise.all([
+    getPublicStaffForClinic(clinic.id),
+    getMarketingTeamMembers(),
+  ]);
 
   return (
     <main className="mx-auto w-full max-w-5xl space-y-8 bg-surface px-6 py-12">
@@ -31,8 +35,28 @@ export default async function TeamPage() {
           Doctors only
         </Link>
       </div>
+
+      {featuredTeam.length ? (
+        <section className="space-y-4">
+          <h2 className="font-headline text-2xl font-bold text-on-surface">Featured team</h2>
+          <div className="flex flex-wrap justify-center gap-8 sm:justify-start">
+            {featuredTeam.map((member) => (
+              <article key={member.id} className="flex w-36 flex-col items-center text-center">
+                <div className="h-28 w-28 overflow-hidden rounded-full bg-surface-container-high ring-4 ring-white shadow-md">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={member.image_url} alt={member.full_name} className="h-full w-full object-cover" />
+                </div>
+                <h3 className="mt-3 font-headline font-bold text-on-surface">{member.full_name}</h3>
+                {member.role_title ? <p className="text-sm text-on-surface-variant">{member.role_title}</p> : null}
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
       <p className="text-on-surface-variant">
-        Team bios and photos are updated by staff through the clinic mobile app.
+        Clinical profiles below are updated by staff in the mobile app. Homepage featured photos are managed in website
+        admin → Our team.
       </p>
       <div className="grid gap-6 md:grid-cols-2">
         {staff.map((member) => (

@@ -48,6 +48,8 @@ import { LinearGradient } from "expo-linear-gradient";
 import { AppAmbientBackground } from "./src/components/AppAmbientBackground";
 import { PawCircularLoader } from "./src/components/PawCircularLoader";
 import { loadPlatformBranding, type PlatformBranding } from "./src/lib/platform-branding";
+import { promptOpenOrSharePdf } from "./src/lib/open-or-share-document";
+import { OwnerShopScreen } from "./src/screens/owner/OwnerShopScreen";
 
 const Tab = createBottomTabNavigator();
 const MOBILE_CONSENT_KEY = "saasclinics_mobile_data_consent_v1";
@@ -1003,7 +1005,7 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
       return;
     }
     if (pdfPath.startsWith("http://") || pdfPath.startsWith("https://")) {
-      await Linking.openURL(pdfPath);
+      await promptOpenOrSharePdf(pdfPath, `prescription-${prescriptionId}`);
       return;
     }
     const { data, error } = await supabase.storage.from("medical-files").createSignedUrl(pdfPath, 60 * 20);
@@ -1011,7 +1013,7 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
       Alert.alert("Unable to open PDF", error?.message ?? "No URL generated");
       return;
     }
-    await Linking.openURL(data.signedUrl);
+    await promptOpenOrSharePdf(data.signedUrl, `prescription-${prescriptionId}`);
   }
 
   async function onOpenVisitReport(visitId: string) {
@@ -1036,7 +1038,7 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
       return;
     }
     if (path.startsWith("http://") || path.startsWith("https://")) {
-      await Linking.openURL(path);
+      await promptOpenOrSharePdf(path, `visit-report-${visitId}`);
       return;
     }
     const { data, error } = await supabase.storage.from("medical-files").createSignedUrl(path, 60 * 20);
@@ -1044,7 +1046,7 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
       Alert.alert("Unable to open PDF", error?.message ?? "No URL generated");
       return;
     }
-    await Linking.openURL(data.signedUrl);
+    await promptOpenOrSharePdf(data.signedUrl, `visit-report-${visitId}`);
   }
 
   async function onOpenLatestPrescriptionForAppointment(appointmentId: string) {
@@ -1609,6 +1611,21 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
                       onOpenAttachment={onOpenAttachment}
                       onOpenPrescriptionPdf={onOpenPrescriptionPdf}
                       onOpenVisitReport={onOpenVisitReport}
+                      refreshing={refreshing}
+                      onRefresh={refreshData}
+                    />
+                  )}
+                </Tab.Screen>
+                <Tab.Screen
+                  name="Shop"
+                  options={{
+                    tabBarIcon: ({ color, size }) => <MaterialIcons name="shopping-bag" size={size} color={color} />,
+                  }}
+                >
+                  {() => (
+                    <OwnerShopScreen
+                      orders={orders}
+                      products={products}
                       refreshing={refreshing}
                       onRefresh={refreshData}
                     />

@@ -12,7 +12,7 @@ import {
   View,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { MaterialIcons } from "@expo/vector-icons";
+import { MaterialIcons, FontAwesome } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { supabase } from "../lib/supabase";
 import { theme, shadows } from "../theme/theme";
@@ -20,6 +20,7 @@ import { AppAmbientBackground } from "../components/AppAmbientBackground";
 import { PawCircularLoader } from "../components/PawCircularLoader";
 import { loadPlatformBranding, type PlatformBranding } from "../lib/platform-branding";
 import { mapAuthError } from "../lib/mapAuthError";
+import { linkPrimaryClinicAfterAuth, signInWithGoogle } from "../lib/google-auth";
 
 export function AuthScreen() {
   const [mode, setMode] = useState<"login" | "signup">("login");
@@ -42,12 +43,27 @@ export function AuthScreen() {
     };
   }, []);
 
-  async function ensurePrimaryClinicCustomerLink() {
-    const { error } = await supabase.rpc("ensure_primary_clinic_customer_membership");
-    if (error) {
-      // Non-fatal: user can still sign in even if primary clinic is not configured yet.
-      console.warn("ensure_primary_clinic_customer_membership:", error.message);
+  async function ensurePrimaryClinicCustomerLink(name?: string, phoneNumber?: string) {
+    await linkPrimaryClinicAfterAuth(name, phoneNumber);
+  }
+
+  async function onGoogleAuth() {
+    setLoading(true);
+    setError(null);
+    try {
+      await signInWithGoogle();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      const meta = user?.user_metadata as { full_name?: string; name?: string; phone?: string } | undefined;
+      await ensurePrimaryClinicCustomerLink(
+        meta?.full_name ?? meta?.name ?? (mode === "signup" ? fullName : undefined),
+        meta?.phone ?? (mode === "signup" ? phone : undefined),
+      );
+    } catch (e) {
+      setError(e instanceof Error ? mapAuthError(e.message) : "Google sign-in failed.");
     }
+    setLoading(false);
   }
 
   async function onAuth() {
@@ -72,7 +88,7 @@ export function AuthScreen() {
           return;
         }
 
-        await ensurePrimaryClinicCustomerLink();
+        await ensurePrimaryClinicCustomerLink(fullName, phone);
       }
     }
     setLoading(false);
@@ -210,6 +226,21 @@ export function AuthScreen() {
                   </>
                 )}
               </LinearGradient>
+            </Pressable>
+
+            <View style={styles.dividerRow}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>or</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            <Pressable
+              onPress={onGoogleAuth}
+              disabled={loading}
+              style={({ pressed }) => [styles.googleBtn, { opacity: pressed || loading ? 0.88 : 1 }]}
+            >
+              <FontAwesome name="google" size={20} color="#4285F4" />
+              <Text style={styles.googleBtnText}>Continue with Google</Text>
             </Pressable>
 
           </View>
@@ -368,6 +399,42 @@ const styles = StyleSheet.create({
     color: theme.onPrimary,
     fontSize: 16,
     fontWeight: "800",
+  },
+  dividerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: theme.outlineVariant,
+  },
+  dividerText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: theme.onSurfaceVariant,
+    textTransform: "uppercase",
+    letterSpacing: 1,
+  },
+  googleBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: theme.outlineVariant,
+    backgroundColor: theme.surface,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+  },
+  googleBtnText: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: theme.onSurface,
   },
   footer: {
     marginTop: 16,

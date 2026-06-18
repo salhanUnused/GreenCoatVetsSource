@@ -370,6 +370,14 @@ export function DoctorConsultScreen({
       file_name: `visit-summary-${visitId}.pdf`,
       mime_type: "application/pdf",
     });
+    await supabase
+      .from("visits")
+      .update({
+        visit_report_pdf_path: path,
+        visit_report_pdf_generated_at: new Date().toISOString(),
+      })
+      .eq("id", visitId)
+      .eq("clinic_id", clinicId);
     const { data: signed } = await supabase.storage.from("medical-files").createSignedUrl(path, 60 * 30);
     setLastVisitSummaryUrl(signed?.signedUrl ?? null);
   }

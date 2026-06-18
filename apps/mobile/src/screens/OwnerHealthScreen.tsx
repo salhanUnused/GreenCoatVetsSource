@@ -73,7 +73,7 @@ export function OwnerHealthScreen({
                   disabled={!hasPdf}
                   onPress={() => onOpenPrescriptionPdf(prescription.id)}
                 >
-                  <Text style={commonStyles.btnOutlineText}>Rx PDF</Text>
+                  <Text style={commonStyles.btnOutlineText}>PDF</Text>
                 </Pressable>
               </View>
               {lines.length ? (
@@ -128,7 +128,7 @@ export function OwnerHealthScreen({
               </Text>
             </View>
             <Pressable style={commonStyles.btnPrimary} onPress={() => onOpenVisitReport(vr.id)}>
-              <Text style={commonStyles.btnPrimaryText}>Open</Text>
+              <Text style={commonStyles.btnPrimaryText}>View PDF</Text>
             </Pressable>
           </View>
         ))}

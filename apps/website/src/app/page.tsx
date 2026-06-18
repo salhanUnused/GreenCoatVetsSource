@@ -11,6 +11,8 @@ import { HeroImageSlider } from "@/components/site/hero-image-slider";
 import { InstagramHomeEmbeds } from "@/components/site/instagram-home-embeds";
 import { clinicMetadata } from "@/lib/seo/clinic-metadata";
 import { createClient } from "@/lib/supabase/server";
+import { getMarketingTeamMembers } from "@/lib/marketing/get-team-members";
+import { HomeTeamSection } from "@/components/site/home-team-section";
 import { getPlatformBranding } from "@/lib/platform-branding";
 
 const FACILITIES = [
@@ -80,10 +82,11 @@ export async function generateMetadata() {
 
 export default async function Home() {
   const clinic = await resolveClinic();
-  const [branding, marketing, publicLocations] = await Promise.all([
+  const [branding, marketing, publicLocations, teamMembers] = await Promise.all([
     getPlatformBranding(),
     getMarketingSiteSettings(),
     getMarketingLocationsOrDefaults(),
+    getMarketingTeamMembers(),
   ]);
   const images = mergeHomepageImages(marketing.homepage_images);
   const heroCopy = mergeHomepageCopy(marketing.homepage_copy);
@@ -260,6 +263,8 @@ export default async function Home() {
             </div>
           </div>
         </section>
+
+        <HomeTeamSection members={teamMembers} />
 
         {marketing.instagram_embed_urls.length ? (
           <InstagramHomeEmbeds urls={marketing.instagram_embed_urls} />

@@ -30,7 +30,13 @@ export async function POST(request: Request) {
       .eq("user_id", user.id)
       .limit(1)
       .maybeSingle();
-    if (existing) return NextResponse.json({ ok: true }, { status: 200 });
+    if (existing) {
+      await supabase.rpc("ensure_primary_clinic_customer_membership", {
+        p_full_name: fullName,
+        p_phone: phone,
+      });
+      return NextResponse.json({ ok: true }, { status: 200 });
+    }
 
     const emailNorm = user.email?.trim().toLowerCase() ?? "";
     if (emailNorm) {
@@ -54,6 +60,10 @@ export async function POST(request: Request) {
           })
           .eq("id", guestOwner.id);
         if (updErr) return NextResponse.json({ error: updErr.message }, { status: 400 });
+        await supabase.rpc("ensure_primary_clinic_customer_membership", {
+          p_full_name: fullName,
+          p_phone: phone,
+        });
         try {
           if (emailNorm) {
             await sendWebsiteWelcomeEmail({ email: emailNorm, fullName });
@@ -85,6 +95,11 @@ export async function POST(request: Request) {
       email: user.email ?? null,
     });
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+
+    await supabase.rpc("ensure_primary_clinic_customer_membership", {
+      p_full_name: fullName,
+      p_phone: phone,
+    });
 
     try {
       if (emailNorm) {

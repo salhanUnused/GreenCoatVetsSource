@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as ExpoLinking from "expo-linking";
 import { StatusBar } from "expo-status-bar";
 import { Alert, Image, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -11,7 +12,21 @@ import { supabase } from "./src/lib/supabase";
 import { clearPendingInvite, loadPendingInvite } from "./src/lib/pending-invite";
 import { normalizeAppointment } from "./src/lib/normalizeAppointment";
 import { ensurePetOwnerRow } from "./src/lib/ensurePetOwner";
-import { DEFAULT_PET_SPECIES_BOOKING_VALUE } from "@saasclinics/lib";
+import {
+  assertAppointmentStartsInFuture,
+  DEFAULT_PET_SPECIES_BOOKING_VALUE,
+  normalizeLegacySpeciesToCanonical,
+} from "@saasclinics/lib";
+import type { BookingDoctor } from "./src/components/BookingDoctorSlotPicker";
+import {
+  APPOINTMENT_BOOKING_CONSENT_TEXT,
+  APPOINTMENT_BOOKING_CONSENT_VERSION,
+} from "./src/lib/appointmentConsent";
+import {
+  formatBookingAgeYearsLabel,
+  normalizeBookingPetGender,
+  parseBookingAgeYearsToMonths,
+} from "./src/lib/petDemographics";
 import { VetCareTabBar } from "./src/navigation/VetCareTabBar";
 import { VetCareTabButton } from "./src/navigation/VetCareTabButton";
 import { OwnerInboxScreen } from "./src/screens/OwnerInboxScreen";
@@ -20,6 +35,7 @@ import { ReceptionistScreen } from "./src/screens/ReceptionistScreen";
 import { OwnerBookingScreen } from "./src/screens/OwnerBookingScreen";
 import { AuthScreen } from "./src/screens/AuthScreen";
 import { WelcomeScreen } from "./src/screens/WelcomeScreen";
+import { WelcomeSplashScreen } from "./src/screens/WelcomeSplashScreen";
 import { WebOnlySuperAdminScreen } from "./src/screens/WebOnlySuperAdminScreen";
 import { DoctorNavigator } from "./src/screens/DoctorNavigator";
 import { OwnerDashboardScreen } from "./src/screens/owner/OwnerDashboardScreen";
@@ -37,6 +53,7 @@ import {
   Order,
   OwnerPrescription,
   OwnerVisitReport,
+  OwnerVisitSummaryRow,
   Pet,
   ProductListItem,
   StaffDoctorOption,
@@ -47,9 +64,16 @@ import { MaterialIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { AppAmbientBackground } from "./src/components/AppAmbientBackground";
 import { PawCircularLoader } from "./src/components/PawCircularLoader";
-import { loadPlatformBranding, type PlatformBranding } from "./src/lib/platform-branding";
+import { loadAppBranding, type AppBranding } from "./src/lib/app-branding";
 import { promptOpenOrSharePdf } from "./src/lib/open-or-share-document";
+import { createSessionFromUrl, isOAuthCallbackUrl } from "./src/lib/google-auth";
+import { ensurePrimaryClinicMembership } from "./src/lib/ensure-clinic-membership";
+import { getPetOwnerProfileStatus } from "./src/lib/owner-profile";
 import { OwnerShopScreen } from "./src/screens/owner/OwnerShopScreen";
+import { OwnerReportsScreen } from "./src/screens/owner/OwnerReportsScreen";
+import { notifyAppointmentBookingEmails } from "./src/lib/website-api";
+import { CompleteProfileScreen } from "./src/screens/CompleteProfileScreen";
+import { WalkInScreen } from "./src/screens/WalkInScreen";
 
 const Tab = createBottomTabNavigator();
 const MOBILE_CONSENT_KEY = "saasclinics_mobile_data_consent_v1";
@@ -57,8 +81,26 @@ const MOBILE_CONSENT_KEY = "saasclinics_mobile_data_consent_v1";
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [splashDone, setSplashDone] = useState(false);
   const [showAuthScreen, setShowAuthScreen] = useState(false);
   const [consentAccepted, setConsentAccepted] = useState(false);
+  const [profileCheckLoading, setProfileCheckLoading] = useState(false);
+  const [needsProfileCompletion, setNeedsProfileCompletion] = useState(false);
+
+  useEffect(() => {
+    const sub = ExpoLinking.addEventListener("url", ({ url }) => {
+      if (!isOAuthCallbackUrl(url)) return;
+      void createSessionFromUrl(url).catch((err) => {
+        console.warn("OAuth callback", err instanceof Error ? err.message : err);
+      });
+    });
+    void ExpoLinking.getInitialURL().then((url) => {
+      if (url && isOAuthCallbackUrl(url)) {
+        void createSessionFromUrl(url).catch(() => undefined);
+      }
+    });
+    return () => sub.remove();
+  }, []);
 
   useEffect(() => {
     AsyncStorage.getItem(MOBILE_CONSENT_KEY)
@@ -70,21 +112,41 @@ export default function App() {
     });
     const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession);
+      if (nextSession?.user?.id) {
+        const meta = nextSession.user.user_metadata as Record<string, string | undefined> | undefined;
+        void ensurePrimaryClinicMembership(meta?.full_name || meta?.name || null, meta?.phone ?? null).catch(() => undefined);
+      }
     });
     return () => listener.subscription.unsubscribe();
   }, []);
 
+  useEffect(() => {
+    if (!session?.user?.id) {
+      setNeedsProfileCompletion(false);
+      setProfileCheckLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setProfileCheckLoading(true);
+    void getPetOwnerProfileStatus(supabase, session.user.id)
+      .then((status) => {
+        if (!cancelled) setNeedsProfileCompletion(status.needsCompletion);
+      })
+      .catch(() => {
+        if (!cancelled) setNeedsProfileCompletion(false);
+      })
+      .finally(() => {
+        if (!cancelled) setProfileCheckLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.user?.id]);
+
   return (
     <SafeAreaProvider>
-      {loading ? (
-        <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
-          <View style={styles.page}>
-            <AppAmbientBackground />
-            <View style={styles.center}>
-              <PawCircularLoader size={88} message="Loading…" />
-            </View>
-          </View>
-        </SafeAreaView>
+      {!splashDone ? (
+        <WelcomeSplashScreen ready={!loading} onFinish={() => setSplashDone(true)} />
       ) : !session ? (
         showAuthScreen ? (
           <AuthScreen />
@@ -98,6 +160,17 @@ export default function App() {
             onContinue={() => setShowAuthScreen(true)}
           />
         )
+      ) : profileCheckLoading ? (
+        <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
+          <View style={styles.page}>
+            <AppAmbientBackground />
+            <View style={styles.center}>
+              <PawCircularLoader size={88} message="Loading your account…" />
+            </View>
+          </View>
+        </SafeAreaView>
+      ) : needsProfileCompletion ? (
+        <CompleteProfileScreen onComplete={() => setNeedsProfileCompletion(false)} />
       ) : (
         <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
           <StatusBar style="dark" />
@@ -118,6 +191,9 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [prescriptions, setPrescriptions] = useState<OwnerPrescription[]>([]);
   const [ownerVisitReports, setOwnerVisitReports] = useState<OwnerVisitReport[]>([]);
+  const [ownerVisitSummaries, setOwnerVisitSummaries] = useState<OwnerVisitSummaryRow[]>([]);
+  const [ownerReportsEnabled, setOwnerReportsEnabled] = useState(true);
+  const [downloadingAllReports, setDownloadingAllReports] = useState(false);
   const [vaccinations, setVaccinations] = useState<
     Array<{ id: string; vaccine_name: string; due_on: string | null; status: string | null; pets?: { name?: string | null } | null }>
   >([]);
@@ -133,6 +209,8 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
   const [ownerId, setOwnerId] = useState<string | null>(null);
   const [ownerPhone, setOwnerPhone] = useState<string | null>(null);
   const [ownerEmail, setOwnerEmail] = useState<string | null>(null);
+  const [ownerFullName, setOwnerFullName] = useState<string | null>(null);
+  const [bookingDoctors, setBookingDoctors] = useState<BookingDoctor[]>([]);
   const [doctorStaffId, setDoctorStaffId] = useState<string | null>(null);
   const [doctorNotifications, setDoctorNotifications] = useState<DoctorNotification[]>([]);
   const [doctorMedicineNames, setDoctorMedicineNames] = useState<string[]>([]);
@@ -146,7 +224,7 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
   const [clinicRecentPrescriptions, setClinicRecentPrescriptions] = useState<
     Array<{ id: string; issued_at: string; notes: string | null; pdf_url: string | null; pets?: { name?: string | null } | null }>
   >([]);
-  const [platformBranding, setPlatformBranding] = useState<PlatformBranding | null>(null);
+  const [platformBranding, setPlatformBranding] = useState<AppBranding | null>(null);
   const [ownerTimeChangeRequests, setOwnerTimeChangeRequests] = useState<
     Array<{ appointment_id: string; requested_starts_at: string; status: string }>
   >([]);
@@ -165,6 +243,11 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
     message: string;
     created_at: string;
   } | null>(null);
+  const [doctorQueueDate, setDoctorQueueDate] = useState(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  });
 
   const appointmentSelect =
     "id, status, starts_at, appointment_type, branch_id, pet_id, owner_id, doctor_id, branches(name), owners(full_name, phone), pets(name, species, photo_url, breed, age_months, date_of_birth, allergies, chronic_diseases)";
@@ -183,7 +266,7 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
     return next;
   }
 
-  async function loadData() {
+  async function loadData(queueDateOverride?: Date) {
     setLoading(true);
     setClinicRecentOrders([]);
     setClinicRecentPrescriptions([]);
@@ -192,6 +275,8 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
     setDoctorNotifications([]);
     setDoctorMedicineNames([]);
     setDoctors([]);
+    setBookingDoctors([]);
+    setOwnerFullName(null);
     setProducts([]);
     setVisitSummaries([]);
     setAdminStats(null);
@@ -252,16 +337,32 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
     }
 
     if (!membershipData) {
+      try {
+        const meta = user.user_metadata as Record<string, string | undefined> | undefined;
+        const displayName = meta?.full_name || meta?.name || null;
+        await ensurePrimaryClinicMembership(displayName, meta?.phone ?? null);
+        const retry = await supabase
+          .from("user_clinic_memberships")
+          .select("clinic_id, role")
+          .eq("user_id", user.id)
+          .eq("is_active", true)
+          .order("updated_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        membershipData = retry.data;
+      } catch (ensureErr) {
+        console.warn("ensurePrimaryClinicMembership", ensureErr instanceof Error ? ensureErr.message : ensureErr);
+      }
+    }
+
+    if (!membershipData) {
       setLoading(false);
       return;
     }
     setMembership(membershipData);
-    const { data: branchData } = await supabase
-      .from("branches")
-      .select("id, name")
-      .eq("clinic_id", membershipData.clinic_id)
-      .eq("is_active", true)
-      .order("name", { ascending: true });
+    const { data: branchData } = await supabase.rpc("get_public_branches_for_clinic", {
+      p_clinic_id: membershipData.clinic_id,
+    });
     setBranches((branchData as Array<{ id: string; name: string }>) ?? []);
     setDoctorStaffId(null);
     setDoctorNotifications([]);
@@ -288,12 +389,15 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
           { data: notificationData },
           { data: ownerAtcrData },
           { data: ownerContactData },
+          { data: bookingDoctorsData },
         ] = await Promise.all([
           supabase
             .from("pets")
             .select("id, name, species, breed, gender, age_months, date_of_birth, allergies, photo_url")
             .eq("clinic_id", membershipData.clinic_id)
             .eq("owner_id", resolvedOwnerId)
+            .eq("is_active", true)
+            .order("name", { ascending: true })
             .limit(20),
           supabase
             .from("orders")
@@ -323,7 +427,7 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
             .limit(40),
           supabase
             .from("notifications")
-            .select("id, title, message, channel, created_at, read_at")
+            .select("id, title, message, channel, created_at, read_at, payload")
             .eq("clinic_id", membershipData.clinic_id)
             .eq("owner_id", resolvedOwnerId)
             .order("created_at", { ascending: false })
@@ -337,9 +441,10 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
             .limit(40),
           supabase
             .from("owners")
-            .select("phone, email")
+            .select("phone, email, full_name")
             .eq("id", resolvedOwnerId)
             .maybeSingle(),
+          supabase.rpc("get_public_booking_doctors", { p_clinic_id: membershipData.clinic_id }),
         ]);
         const hydratedPets = await hydratePetImageUrls((petsData as Pet[]) ?? []);
         setPets(hydratedPets);
@@ -359,6 +464,7 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
             channel: string;
             created_at: string;
             read_at: string | null;
+            payload?: { kind?: string; visit_id?: string } | null;
           }>) ?? []
         );
         setOwnerTimeChangeRequests(
@@ -366,6 +472,8 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
         );
         setOwnerPhone((ownerContactData as { phone?: string | null } | null)?.phone ?? null);
         setOwnerEmail((ownerContactData as { email?: string | null } | null)?.email ?? null);
+        setOwnerFullName((ownerContactData as { full_name?: string | null } | null)?.full_name ?? null);
+        setBookingDoctors((bookingDoctorsData as BookingDoctor[] | null) ?? []);
         setPendingTimeChangeRequests([]);
 
         const petIds = ((petsData as Pet[]) ?? []).map((pet) => pet.id);
@@ -485,6 +593,64 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
           setVisitSummaries([]);
           setOwnerVisitReports([]);
         }
+
+        const [{ data: clinicRow }, { data: summaryRows }] = await Promise.all([
+          supabase
+            .from("clinics")
+            .select("website_owner_visit_reports_enabled")
+            .eq("id", membershipData.clinic_id)
+            .maybeSingle(),
+          supabase.rpc("get_owner_portal_visit_summaries", {
+            p_clinic_id: membershipData.clinic_id,
+            p_limit: 100,
+          }),
+        ]);
+        setOwnerReportsEnabled(
+          (clinicRow as { website_owner_visit_reports_enabled?: boolean | null } | null)?.website_owner_visit_reports_enabled ??
+            true,
+        );
+        const summaryList = (summaryRows ?? []) as Array<{
+          id: string;
+          pet_name: string;
+          branch_name: string;
+          visited_at: string | null;
+          status_label: string | null;
+        }>;
+        const summaryIds = summaryList.map((row) => row.id);
+        const pdfMap = new Map<string, { generated: string | null; path: string | null }>();
+        if (summaryIds.length) {
+          const { data: pdfRows } = await supabase
+            .from("visits")
+            .select("id, visit_report_pdf_path, visit_report_pdf_generated_at")
+            .eq("clinic_id", membershipData.clinic_id)
+            .in("id", summaryIds);
+          for (const row of (pdfRows ?? []) as Array<{
+            id: string;
+            visit_report_pdf_path: string | null;
+            visit_report_pdf_generated_at: string | null;
+          }>) {
+            pdfMap.set(row.id, {
+              path: row.visit_report_pdf_path,
+              generated: row.visit_report_pdf_generated_at,
+            });
+          }
+        }
+        setOwnerVisitSummaries(
+          summaryList.map((row) => {
+            const pdf = pdfMap.get(row.id);
+            const hasPath = Boolean(pdf?.path?.trim());
+            const hasGenerated = Boolean(pdf?.generated);
+            return {
+              id: row.id,
+              pet_name: row.pet_name,
+              branch_name: row.branch_name,
+              visited_at: row.visited_at,
+              status_label: row.status_label,
+              report_ready: hasPath && hasGenerated,
+              visit_report_pdf_generated_at: pdf?.generated ?? null,
+            };
+          }),
+        );
       } else {
         setOwnerTimeChangeRequests([]);
       }
@@ -499,20 +665,24 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
         .limit(1)
         .maybeSingle();
       setDoctorStaffId(doctor?.id ?? null);
-      const dayStart = new Date();
+      const queueDay = queueDateOverride ?? doctorQueueDate;
+      const dayStart = new Date(queueDay);
       dayStart.setHours(0, 0, 0, 0);
-      const dayEnd = new Date();
+      const dayEnd = new Date(queueDay);
       dayEnd.setHours(23, 59, 59, 999);
+      let appointmentsQuery = supabase
+        .from("appointments")
+        .select(appointmentSelect)
+        .eq("clinic_id", membershipData.clinic_id)
+        .gte("starts_at", dayStart.toISOString())
+        .lte("starts_at", dayEnd.toISOString())
+        .order("starts_at", { ascending: true })
+        .limit(120);
+      if (doctor?.id) {
+        appointmentsQuery = appointmentsQuery.or(`doctor_id.eq.${doctor.id},doctor_id.is.null`);
+      }
       const [{ data: appointmentsData }, { data: notifData }, { data: medsData }] = await Promise.all([
-        supabase
-          .from("appointments")
-          .select(appointmentSelect)
-          .eq("clinic_id", membershipData.clinic_id)
-          .eq("doctor_id", doctor?.id ?? "00000000-0000-0000-0000-000000000000")
-          .gte("starts_at", dayStart.toISOString())
-          .lte("starts_at", dayEnd.toISOString())
-          .order("starts_at", { ascending: true })
-          .limit(80),
+        appointmentsQuery,
         supabase
           .from("notifications")
           .select("id, title, message, created_at, read_at")
@@ -699,7 +869,7 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
 
   useEffect(() => {
     let cancelled = false;
-    loadPlatformBranding().then((b) => {
+    loadAppBranding().then((b) => {
       if (!cancelled) setPlatformBranding(b);
     });
     return () => {
@@ -768,18 +938,50 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
     await loadData();
   }
 
-  async function ensureVisitForAppointment(appointmentId: string, complete = false) {
+  async function ensureVisitForAppointment(appointmentId: string, complete = false, checkIn = false) {
     if (!membership?.clinic_id) return null;
-    const { data: existing } = await supabase.from("visits").select("id").eq("appointment_id", appointmentId).limit(1).maybeSingle();
-    if (existing?.id) return existing.id;
+    const nowIso = new Date().toISOString();
+    const { data: existing } = await supabase.from("visits").select("id, check_in_at").eq("appointment_id", appointmentId).limit(1).maybeSingle();
 
     const { data: appointment } = await supabase
       .from("appointments")
-      .select("id, branch_id, pet_id, owner_id, doctor_id")
+      .select("id, branch_id, pet_id, owner_id, doctor_id, status")
       .eq("id", appointmentId)
       .eq("clinic_id", membership.clinic_id)
       .maybeSingle();
     if (!appointment) return null;
+
+    const assignedDoctorId =
+      appointment.doctor_id ?? (membership.role === "doctor" ? doctorStaffId : null);
+
+    if (checkIn && assignedDoctorId && !appointment.doctor_id) {
+      await supabase
+        .from("appointments")
+        .update({ doctor_id: assignedDoctorId })
+        .eq("id", appointmentId)
+        .eq("clinic_id", membership.clinic_id);
+    }
+
+    if (existing?.id) {
+      if (checkIn) {
+        const visitPatch: { check_in_at?: string; started_at?: string; doctor_id?: string } = {};
+        if (!existing.check_in_at) visitPatch.check_in_at = nowIso;
+        visitPatch.started_at = nowIso;
+        if (assignedDoctorId) visitPatch.doctor_id = assignedDoctorId;
+        await supabase.from("visits").update(visitPatch).eq("id", existing.id);
+        if (appointment.status === "scheduled") {
+          await supabase
+            .from("appointments")
+            .update({ status: "checked_in" })
+            .eq("id", appointmentId)
+            .eq("clinic_id", membership.clinic_id);
+        }
+      }
+      if (complete) {
+        await supabase.from("visits").update({ completed_at: nowIso }).eq("id", existing.id);
+      }
+      return existing.id;
+    }
 
     const { data: created } = await supabase
       .from("visits")
@@ -789,12 +991,22 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
         appointment_id: appointment.id,
         pet_id: appointment.pet_id,
         owner_id: appointment.owner_id,
-        doctor_id: appointment.doctor_id,
-        started_at: new Date().toISOString(),
-        completed_at: complete ? new Date().toISOString() : null,
+        doctor_id: assignedDoctorId,
+        check_in_at: checkIn ? nowIso : null,
+        started_at: nowIso,
+        completed_at: complete ? nowIso : null,
       })
       .select("id")
       .single();
+
+    if (checkIn && appointment.status === "scheduled") {
+      await supabase
+        .from("appointments")
+        .update({ status: "checked_in" })
+        .eq("id", appointmentId)
+        .eq("clinic_id", membership.clinic_id);
+    }
+
     return created?.id ?? null;
   }
 
@@ -845,6 +1057,7 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
     }
     setActionMessage("Document uploaded.");
     Alert.alert("Uploaded", "Document attached to visit.");
+    await loadData();
   }
 
   async function onCreateOwnerAppointment(input: {
@@ -856,13 +1069,18 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
     newPetAgeMonths?: number | null;
     branchId: string;
     appointmentType: string;
+    doctorId?: string | null;
     startsAt: string;
     notes: string;
     chiefComplaint?: string;
     allergies?: string;
     currentMedications?: string;
+    contactFullName: string;
     contactPhone: string;
     contactEmail?: string;
+    petGender?: string | null;
+    petAgeYears?: string;
+    bookingConsent: boolean;
   }) {
     if (!membership?.clinic_id) return;
 
@@ -874,12 +1092,26 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
     const newPetName = input.newPetName?.trim();
     const newPetSpecies = input.newPetSpecies?.trim();
     const appointmentType = input.appointmentType?.trim();
+    const doctorId = input.doctorId?.trim() || null;
     const notes = input.notes?.trim() ?? "";
     const chiefComplaint = input.chiefComplaint?.trim();
     const allergies = input.allergies?.trim();
     const currentMedications = input.currentMedications?.trim();
+    const contactFullName = input.contactFullName?.trim();
     const contactPhone = input.contactPhone?.trim();
     const contactEmail = (input.contactEmail?.trim() ?? "").toLowerCase() || null;
+    const petGender = normalizeBookingPetGender(input.petGender ?? input.newPetGender);
+    const petAgeMonths =
+      input.newPetAgeMonths != null
+        ? input.newPetAgeMonths
+        : input.petAgeYears
+          ? parseBookingAgeYearsToMonths(input.petAgeYears)
+          : null;
+    const patientAgeLabel =
+      formatBookingAgeYearsLabel(input.petAgeYears ?? "") ??
+      (input.newPetAgeMonths != null
+        ? formatBookingAgeYearsLabel(String(input.newPetAgeMonths / 12))
+        : null);
 
     if (!branchId || !startsAtRaw) {
       Alert.alert("Missing details", "Choose a branch and a date & time before booking.");
@@ -889,12 +1121,36 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
       Alert.alert("Missing details", "Branch, pet and time are required.");
       return;
     }
+    if (!existingPetId && !petGender) {
+      Alert.alert("Pet gender required", "Select a gender for your new pet.");
+      return;
+    }
+    if (!existingPetId && !petAgeMonths) {
+      Alert.alert("Pet age required", "Enter your pet's age in years.");
+      return;
+    }
     if (!appointmentType || !appointmentTypes.includes(appointmentType as (typeof appointmentTypes)[number])) {
       Alert.alert("Invalid appointment type", "Please choose a valid appointment type.");
       return;
     }
+    if (!input.bookingConsent) {
+      Alert.alert("Consent required", "You must accept the booking consent before submitting.");
+      return;
+    }
+    if (!contactFullName) {
+      Alert.alert("Full name required", "Enter your full name for this booking.");
+      return;
+    }
     if (!contactPhone) {
       Alert.alert("Contact phone required", "Add a phone number so the clinic can reach you.");
+      return;
+    }
+
+    let startsAtIso: string;
+    try {
+      startsAtIso = assertAppointmentStartsInFuture(startsAtRaw).toISOString();
+    } catch (e) {
+      Alert.alert("Invalid time", e instanceof Error ? e.message : "Please choose a future date and time.");
       return;
     }
 
@@ -921,13 +1177,10 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
           owner_id: resolvedOwnerId,
           primary_branch_id: branchId,
           name: newPetName!,
-          species: newPetSpecies || DEFAULT_PET_SPECIES_BOOKING_VALUE,
+          species: normalizeLegacySpeciesToCanonical(newPetSpecies || DEFAULT_PET_SPECIES_BOOKING_VALUE),
           breed: input.newPetBreed?.trim() || null,
-          gender: input.newPetGender?.trim() || null,
-          age_months:
-            input.newPetAgeMonths != null && Number.isFinite(input.newPetAgeMonths)
-              ? Math.round(input.newPetAgeMonths)
-              : null,
+          gender: petGender,
+          age_months: petAgeMonths,
           is_active: true,
         })
         .select("id")
@@ -938,25 +1191,62 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
         return;
       }
       petId = createdPet.id;
+    } else if (petGender || petAgeMonths) {
+      const { error: petUpdateError } = await supabase
+        .from("pets")
+        .update({
+          gender: petGender || undefined,
+          age_months: petAgeMonths ?? undefined,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", petId)
+        .eq("clinic_id", membership.clinic_id)
+        .eq("owner_id", resolvedOwnerId);
+      if (petUpdateError) {
+        Alert.alert("Pet update failed", petUpdateError.message);
+        return;
+      }
     }
 
     const ownerIntake = {
       chief_complaint: chiefComplaint || null,
       allergies: allergies || null,
       current_medications: currentMedications || null,
+      contact_name: contactFullName || null,
       contact_phone: contactPhone || null,
       contact_email: contactEmail,
+      patient_gender: petGender || null,
+      patient_age: patientAgeLabel || null,
+      consent_accepted: true,
+      consent_text: APPOINTMENT_BOOKING_CONSENT_TEXT,
+      consent_version: APPOINTMENT_BOOKING_CONSENT_VERSION,
+      consent_at: new Date().toISOString(),
     };
+
+    const { error: ownerUpdateError } = await supabase
+      .from("owners")
+      .update({
+        full_name: contactFullName,
+        phone: contactPhone,
+        email: contactEmail,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", resolvedOwnerId)
+      .eq("clinic_id", membership.clinic_id);
+    if (ownerUpdateError) {
+      Alert.alert("Profile update failed", ownerUpdateError.message);
+      return;
+    }
 
     const { error } = await supabase.from("appointments").insert({
       clinic_id: membership.clinic_id,
       branch_id: branchId,
-      doctor_id: null,
+      doctor_id: doctorId,
       pet_id: petId,
       owner_id: resolvedOwnerId,
       appointment_type: appointmentType as "consultation" | "vaccination" | "surgery" | "grooming" | "emergency",
       status: "scheduled",
-      starts_at: new Date(startsAtRaw).toISOString(),
+      starts_at: startsAtIso,
       reason: chiefComplaint || null,
       notes: notes || null,
       owner_intake: ownerIntake,
@@ -967,7 +1257,29 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
       Alert.alert("Booking failed", error.message);
       return;
     }
+
+    try {
+      await notifyAppointmentBookingEmails({
+        clinicId: membership.clinic_id,
+        branchId,
+        appointmentType,
+        startsAtIso,
+        petId: petId!,
+        chiefComplaint: chiefComplaint || null,
+        notes: notes || null,
+        contactFullName,
+        contactPhone,
+        contactEmail,
+      });
+    } catch (mailErr) {
+      console.warn("[booking] notification email failed", mailErr);
+    }
+
+    setOwnerFullName(contactFullName);
+    setOwnerPhone(contactPhone);
+    setOwnerEmail(contactEmail);
     setActionMessage("Appointment booked.");
+    Alert.alert("Booked", "Your appointment has been scheduled.");
     await loadData();
   }
 
@@ -1047,6 +1359,22 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
       return;
     }
     await promptOpenOrSharePdf(data.signedUrl, `visit-report-${visitId}`);
+  }
+
+  async function onDownloadAllVisitReports() {
+    const ready = ownerVisitSummaries.filter((v) => v.report_ready);
+    if (!ready.length) {
+      Alert.alert("No reports", "There are no visit report PDFs ready to download yet.");
+      return;
+    }
+    setDownloadingAllReports(true);
+    try {
+      for (const row of ready) {
+        await onOpenVisitReport(row.id);
+      }
+    } finally {
+      setDownloadingAllReports(false);
+    }
   }
 
   async function onOpenLatestPrescriptionForAppointment(appointmentId: string) {
@@ -1491,7 +1819,13 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
       ) : !membership ? (
         <View style={styles.center}>
           <Text style={styles.noAccessTitle}>No clinic access</Text>
-          <Text style={styles.noAccessBody}>Ask your administrator to invite you or assign a role in the dashboard.</Text>
+          <Text style={styles.noAccessBody}>
+            We could not link your account to the clinic yet. Pull down to refresh, or sign out and sign in again after
+            your clinic admin confirms registration.
+          </Text>
+          <Pressable style={styles.retryBtn} onPress={() => void refreshData()}>
+            <Text style={styles.retryBtnText}>Try again</Text>
+          </Pressable>
         </View>
       ) : (
         <NavigationContainer
@@ -1584,9 +1918,21 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
                 >
                   {() => (
                     <OwnerBookingScreen
-                      petOptions={pets.map((p) => ({ id: p.id, name: p.name, photo_url: p.photo_url }))}
+                      clinicId={membership.clinic_id ?? ""}
+                      petOptions={pets.map((p) => ({
+                        id: p.id,
+                        name: p.name,
+                        photo_url: p.photo_url,
+                        gender: p.gender,
+                        age_months: p.age_months,
+                      }))}
                       branchOptions={branches}
+                      bookingDoctors={bookingDoctors}
                       appointments={appointments}
+                      ownerFullName={ownerFullName}
+                      ownerNeedsName={
+                        !ownerFullName?.trim() || ownerFullName.trim().length < 2
+                      }
                       ownerPhone={ownerPhone}
                       ownerEmail={ownerEmail}
                       onCreate={onCreateOwnerAppointment}
@@ -1617,6 +1963,24 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
                   )}
                 </Tab.Screen>
                 <Tab.Screen
+                  name="Reports"
+                  options={{
+                    tabBarIcon: ({ color, size }) => <MaterialIcons name="description" size={size} color={color} />,
+                  }}
+                >
+                  {() => (
+                    <OwnerReportsScreen
+                      reportsEnabled={ownerReportsEnabled}
+                      visitSummaries={ownerVisitSummaries}
+                      onOpenVisitReport={onOpenVisitReport}
+                      onDownloadAll={onDownloadAllVisitReports}
+                      downloadingAll={downloadingAllReports}
+                      refreshing={refreshing}
+                      onRefresh={refreshData}
+                    />
+                  )}
+                </Tab.Screen>
+                <Tab.Screen
                   name="Shop"
                   options={{
                     tabBarIcon: ({ color, size }) => <MaterialIcons name="shopping-bag" size={size} color={color} />,
@@ -1638,16 +2002,21 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
                   }}
                 >
                   {() => (
-                    <OwnerInboxScreen notifications={notifications} refreshing={refreshing} onRefresh={refreshData} />
+                    <OwnerInboxScreen
+                      notifications={notifications}
+                      refreshing={refreshing}
+                      onRefresh={refreshData}
+                      onOpenVisitReport={onOpenVisitReport}
+                    />
                   )}
                 </Tab.Screen>
               </>
             ) : role === "doctor" ? (
               <>
                 <Tab.Screen
-                  name="Doctor"
+                  name="Appointments"
                   options={{
-                    tabBarIcon: ({ color, size }) => <MaterialIcons name="medical-services" size={size} color={color} />,
+                    tabBarIcon: ({ color, size }) => <MaterialIcons name="event" size={size} color={color} />,
                   }}
                 >
                   {() =>
@@ -1656,8 +2025,14 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
                         appointments={appointments}
                         clinicId={membership.clinic_id}
                         doctorStaffId={doctorStaffId}
+                        queueDate={doctorQueueDate}
+                        onQueueDateChange={(date) => {
+                          setDoctorQueueDate(date);
+                          void loadData(date);
+                        }}
                         ensureVisitForAppointment={ensureVisitForAppointment}
                         onUploadVisitImage={onUploadVisitImage}
+                        onUploadDocument={onUploadDocument}
                         onStatusChange={onStatusChange}
                         notifications={doctorNotifications}
                         medicineNames={doctorMedicineNames}
@@ -1666,6 +2041,21 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
                       />
                     ) : null
                   }
+                </Tab.Screen>
+                <Tab.Screen
+                  name="Walk-in"
+                  options={{
+                    tabBarIcon: ({ color, size }) => <MaterialIcons name="person-add-alt-1" size={size} color={color} />,
+                  }}
+                >
+                  {() => (
+                    <WalkInScreen
+                      branches={branches}
+                      onWalkIn={onWalkIn}
+                      refreshing={refreshing}
+                      onRefresh={refreshData}
+                    />
+                  )}
                 </Tab.Screen>
                 <Tab.Screen
                   name="Profile"
@@ -1748,8 +2138,14 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
                         appointments={appointments}
                         clinicId={membership.clinic_id}
                         doctorStaffId={doctorStaffId}
+                        queueDate={doctorQueueDate}
+                        onQueueDateChange={(date) => {
+                          setDoctorQueueDate(date);
+                          void loadData(date);
+                        }}
                         ensureVisitForAppointment={ensureVisitForAppointment}
                         onUploadVisitImage={onUploadVisitImage}
+                        onUploadDocument={onUploadDocument}
                         onStatusChange={onStatusChange}
                         notifications={doctorNotifications}
                         medicineNames={doctorMedicineNames}
@@ -2013,6 +2409,14 @@ const styles = StyleSheet.create({
   },
   noAccessTitle: { fontSize: 18, fontWeight: "800", color: theme.onSurface, marginBottom: 8, textAlign: "center" },
   noAccessBody: { fontSize: 14, color: theme.onSurfaceVariant, textAlign: "center", paddingHorizontal: 24, lineHeight: 20 },
+  retryBtn: {
+    marginTop: 16,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: theme.primary,
+  },
+  retryBtnText: { color: theme.onPrimary, fontWeight: "800", fontSize: 15 },
   announcementModalRoot: {
     flex: 1,
     justifyContent: "center",

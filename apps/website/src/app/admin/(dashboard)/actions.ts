@@ -8,6 +8,7 @@ import type { HomepageCopy, SocialLinks } from "@/lib/marketing/defaults";
 import { DEFAULT_HOMEPAGE_IMAGES, type HomepageImageKey } from "@/lib/marketing/defaults";
 import { parseInstagramEmbedUrlsBlock } from "@/lib/marketing/instagram-embed-url";
 import { fetchInstagramMediaPermalinks, getInstagramGraphEnv } from "@/lib/marketing/instagram-graph-media";
+import { validateSquarePngUpload } from "@saasclinics/lib";
 
 async function requireSuperAdmin() {
   await assertSuperAdmin();
@@ -646,4 +647,68 @@ export async function deleteMarketingTeamMember(formData: FormData) {
   revalidatePath("/team");
   revalidatePath("/admin/team");
   redirect("/admin/team?deleted=1");
+}
+
+const WEBSITE_FAVICON_PATH = "marketing/branding/website-favicon.png";
+
+export async function updateWebsiteFavicon(formData: FormData) {
+  try {
+    const supabase = await requireMarketingManagerClient();
+    const photo = formData.get("website_favicon");
+    if (!(photo instanceof File) || photo.size === 0) {
+      redirect("/admin/settings?error=Choose%20a%20square%20PNG%20favicon%20to%20upload.");
+    }
+
+    const bytes = new Uint8Array(await photo.arrayBuffer());
+    const validation = validateSquarePngUpload(bytes);
+    if (!validation.ok) {
+      redirect(`/admin/settings?error=${encodeURIComponent(validation.reason)}`);
+    }
+
+    const { error: uploadError } = await supabase.storage.from("clinic-assets").upload(WEBSITE_FAVICON_PATH, bytes, {
+      contentType: "image/png",
+      upsert: true,
+    });
+    if (uploadError) throw new Error(uploadError.message);
+
+    const { data: publicUrl } = supabase.storage.from("clinic-assets").getPublicUrl(WEBSITE_FAVICON_PATH);
+    const website_favicon_url = `${publicUrl.publicUrl}?v=${Date.now()}`;
+
+    const { error } = await supabase.from("marketing_site_settings").upsert(
+      {
+        id: "default",
+        website_favicon_url,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "id" },
+    );
+    if (error) throw new Error(error.message);
+
+    revalidatePath("/", "layout");
+    revalidatePath("/");
+    revalidatePath("/icon");
+    revalidatePath("/apple-icon");
+    revalidatePath("/admin/settings");
+    redirect("/admin/settings?favicon_saved=1");
+  } catch (e) {
+    redirect(`/admin/settings?error=${encodeURIComponent(e instanceof Error ? e.message : "Could not save favicon.")}`);
+  }
+}
+
+export async function clearWebsiteFavicon() {
+  const supabase = await requireMarketingManagerClient();
+  const { error } = await supabase
+    .from("marketing_site_settings")
+    .update({ website_favicon_url: null, updated_at: new Date().toISOString() })
+    .eq("id", "default");
+  if (error) {
+    redirect(`/admin/settings?error=${encodeURIComponent(error.message)}`);
+  }
+
+  revalidatePath("/", "layout");
+  revalidatePath("/");
+  revalidatePath("/icon");
+  revalidatePath("/apple-icon");
+  revalidatePath("/admin/settings");
+  redirect("/admin/settings?favicon_cleared=1");
 }

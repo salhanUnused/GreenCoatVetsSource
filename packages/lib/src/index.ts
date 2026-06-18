@@ -5,7 +5,7 @@ export {
   type PlatformBranding,
 } from "./platform-branding";
 
-export { buildPlatformIcons, resolvePublicSiteUrl } from "./site-metadata";
+export { buildPlatformIcons, buildWebsiteIcons, resolvePublicSiteUrl } from "./site-metadata";
 
 export { DEFAULT_FAVICON_SVG, fetchTabIconResponse, isSquareFavicon, validateSquarePngUpload } from "./tab-icon";
 

@@ -14,6 +14,9 @@ const nextConfig = {
       { source: "/comments/feed/:path*", destination: "/", permanent: true },
     ];
   },
+  async rewrites() {
+    return [{ source: "/favicon.ico", destination: "/icon" }];
+  },
   images: {
     remotePatterns: [
       {

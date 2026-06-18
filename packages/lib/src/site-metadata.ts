@@ -27,6 +27,21 @@ export function buildPlatformIcons(customFaviconUrl?: string | null): PlatformIc
   };
 }
 
+/** Marketing website favicon — uses uploaded URL for every icon slot (no static /favicon.ico). */
+export function buildWebsiteIcons(websiteFaviconUrl?: string | null): PlatformIconMetadata {
+  const custom = websiteFaviconUrl?.trim();
+  if (!custom) return STATIC_PLATFORM_ICONS;
+  return {
+    icon: [
+      { url: custom, type: "image/png", sizes: "48x48" },
+      { url: custom, type: "image/png", sizes: "32x32" },
+      { url: custom, type: "image/png", sizes: "16x16" },
+    ],
+    shortcut: [{ url: custom }],
+    apple: [{ url: custom, type: "image/png", sizes: "180x180" }],
+  };
+}
+
 export function resolvePublicSiteUrl(envValue: string | undefined, fallback: string): URL {
   const raw = (envValue ?? fallback).trim().replace(/\/$/, "");
   try {

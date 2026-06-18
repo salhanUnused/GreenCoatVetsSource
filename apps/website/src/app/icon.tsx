@@ -1,9 +1,8 @@
-import { fetchTabIconResponse, resolveFaviconUrl } from "@saasclinics/lib";
-import { getPlatformBranding } from "@/lib/platform-branding";
+import { fetchTabIconResponse } from "@saasclinics/lib";
+import { getWebsiteFaviconUrl } from "@/lib/marketing/website-favicon";
 
 export const dynamic = "force-dynamic";
 
 export default async function Icon() {
-  const branding = await getPlatformBranding();
-  return fetchTabIconResponse(resolveFaviconUrl(branding));
+  return fetchTabIconResponse(await getWebsiteFaviconUrl());
 }

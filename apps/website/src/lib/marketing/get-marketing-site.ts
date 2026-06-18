@@ -25,6 +25,7 @@ export type MarketingSiteSettingsRow = {
   /** Canonical Instagram post/reel permalinks for homepage embeds. */
   instagram_embed_urls: string[];
   seo_settings: MarketingSeoSettings;
+  website_favicon_url: string | null;
 };
 
 const EMPTY: MarketingSiteSettingsRow = {
@@ -36,6 +37,7 @@ const EMPTY: MarketingSiteSettingsRow = {
   homepage_copy: {},
   instagram_embed_urls: [],
   seo_settings: { ...EMPTY_SEO_SETTINGS },
+  website_favicon_url: null,
 };
 
 export async function getMarketingSiteSettings(): Promise<MarketingSiteSettingsRow> {
@@ -43,7 +45,7 @@ export async function getMarketingSiteSettings(): Promise<MarketingSiteSettingsR
   const { data, error } = await supabase
     .from("marketing_site_settings")
     .select(
-      "default_clinic_id, website_branded_for_clinic_id, contact_form_recipient_email, homepage_images, social_links, homepage_copy, instagram_embed_urls, seo_settings",
+      "default_clinic_id, website_branded_for_clinic_id, contact_form_recipient_email, homepage_images, social_links, homepage_copy, instagram_embed_urls, seo_settings, website_favicon_url",
     )
     .eq("id", "default")
     .maybeSingle();
@@ -73,6 +75,7 @@ export async function getMarketingSiteSettings(): Promise<MarketingSiteSettingsR
     homepage_copy: ((data as { homepage_copy?: HomepageCopy | null }).homepage_copy as HomepageCopy) ?? {},
     instagram_embed_urls,
     seo_settings,
+    website_favicon_url: ((data as { website_favicon_url?: string | null }).website_favicon_url as string | null)?.trim() || null,
   };
 }
 

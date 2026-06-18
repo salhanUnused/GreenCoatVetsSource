@@ -7,7 +7,7 @@ import { getMarketingFooterNav } from "@/lib/marketing/footer-nav";
 import { getMarketingSiteSettings, mergeHomepageCopy } from "@/lib/marketing/get-marketing-site";
 import { getActiveMarketingPopups } from "@/lib/marketing/popups";
 import { StoreProviders } from "@/components/store/store-providers";
-import { buildPlatformIcons } from "@saasclinics/lib";
+import { buildWebsiteIcons } from "@saasclinics/lib";
 import { getPlatformBranding } from "@/lib/platform-branding";
 import { getWebsitePublicBaseUrlFromRequest } from "@/lib/seo/public-site-url";
 
@@ -32,7 +32,7 @@ export async function generateMetadata(): Promise<Metadata> {
     metadataBase,
     title: { default: `${branding.product_name} — Clinical Sanctuary`, template: `%s · ${branding.product_name}` },
     description: "Veterinary care, appointments, store, and wellness — GreenCoatVets experience.",
-    icons: buildPlatformIcons(),
+    icons: buildWebsiteIcons(marketing.website_favicon_url),
     ...(verification
       ? { verification: { google: verification } }
       : {}),
@@ -62,10 +62,14 @@ export default async function RootLayout({
         ...group,
         links: group.links.filter((item) => item.href !== "/store"),
       }));
+  const faviconHref = marketing.website_favicon_url ?? "/favicon-48x48.png";
 
   return (
     <html lang="en" className={`scroll-smooth ${inter.variable} ${manrope.variable}`}>
       <head>
+        <link rel="icon" href={faviconHref} type="image/png" sizes="48x48" />
+        <link rel="shortcut icon" href={faviconHref} type="image/png" />
+        <link rel="apple-touch-icon" href={faviconHref} sizes="180x180" />
         <link rel="sitemap" type="application/xml" title="Sitemap" href={sitemapUrl} />
         <link
           rel="stylesheet"

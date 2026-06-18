@@ -1,4 +1,4 @@
-import { refreshInstagramEmbedsFromGraph, updateMarketingSettings } from "@/app/admin/(dashboard)/actions";
+import { clearWebsiteFavicon, refreshInstagramEmbedsFromGraph, updateMarketingSettings, updateWebsiteFavicon } from "@/app/admin/(dashboard)/actions";
 import { AdminFlashMessages } from "@/components/admin/admin-flash-messages";
 import { AdminSubmitButton } from "@/components/admin/admin-submit-button";
 import { MarketingImageFields } from "@/components/admin/marketing-image-fields";
@@ -25,6 +25,8 @@ export default async function AdminSettingsPage({
 }) {
   await requireMarketingManager();
   const saved = searchParams.saved === "1" || searchParams.saved === "true";
+  const faviconSaved = searchParams.favicon_saved === "1" || searchParams.favicon_saved === "true";
+  const faviconCleared = searchParams.favicon_cleared === "1" || searchParams.favicon_cleared === "true";
   const igSync = searchParams.ig_sync === "1" || searchParams.ig_sync === "true";
   const errorParam = searchParams.error;
   const errorMessage = typeof errorParam === "string" ? errorParam : null;
@@ -51,7 +53,16 @@ export default async function AdminSettingsPage({
         </p>
       </div>
 
-      <AdminFlashMessages saved={saved} error={errorMessage} />
+      <AdminFlashMessages saved={saved || faviconSaved} error={errorMessage} />
+      {faviconCleared ? (
+        <div
+          role="status"
+          className="flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 shadow-sm"
+        >
+          <span className="material-symbols-outlined shrink-0 text-emerald-600">check_circle</span>
+          <p className="font-headline font-bold">Website favicon reset to default paw icon.</p>
+        </div>
+      ) : null}
       {igSync ? (
         <div
           role="status"
@@ -66,6 +77,52 @@ export default async function AdminSettingsPage({
           </div>
         </div>
       ) : null}
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h2 className="font-headline text-lg font-bold text-primary">Website favicon (browser tab)</h2>
+        <p className="mt-1 text-sm text-slate-600">
+          Upload a <strong>square PNG</strong> used only on this marketing website — independent of the clinic web portal favicon.
+          Recommended 48×48 or 192×192 pixels. This replaces the default paw icon in browser tabs and Google search over time.
+        </p>
+        {settings.website_favicon_url ? (
+          <div className="mt-4 flex items-center gap-4">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={settings.website_favicon_url}
+              alt="Current website favicon"
+              className="h-16 w-16 rounded-xl border border-slate-200 bg-white object-cover p-1"
+            />
+            <p className="text-sm text-slate-600">Current favicon is live on the public website.</p>
+          </div>
+        ) : (
+          <p className="mt-4 text-sm text-slate-500">Using the built-in GreenCoatVets paw icon.</p>
+        )}
+        <form action={updateWebsiteFavicon} className="mt-4 flex flex-wrap items-end gap-3" encType="multipart/form-data">
+          <div className="min-w-[220px] flex-1">
+            <label className="text-xs font-bold uppercase text-slate-500">Upload favicon PNG</label>
+            <input
+              name="website_favicon"
+              type="file"
+              accept="image/png"
+              required={!settings.website_favicon_url}
+              className="mt-1 block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-primary/10 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-primary"
+            />
+          </div>
+          <AdminSubmitButton pendingLabel="Uploading…" className="rounded-xl bg-primary px-5 py-2.5 font-bold text-white">
+            {settings.website_favicon_url ? "Replace favicon" : "Upload favicon"}
+          </AdminSubmitButton>
+        </form>
+        {settings.website_favicon_url ? (
+          <form action={clearWebsiteFavicon} className="mt-3">
+            <AdminSubmitButton
+              pendingLabel="Resetting…"
+              className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-bold text-slate-700"
+            >
+              Reset to default paw icon
+            </AdminSubmitButton>
+          </form>
+        ) : null}
+      </section>
 
       <form action={updateMarketingSettings} className="space-y-10">
         <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">

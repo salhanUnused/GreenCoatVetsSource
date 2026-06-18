@@ -556,20 +556,20 @@ async function uploadMarketingTeamPhoto(memberId: string, file: File): Promise<s
 }
 
 export async function addMarketingTeamMember(formData: FormData) {
+  const supabase = await requireMarketingManagerClient();
+  const full_name = (formData.get("full_name") as string | null)?.trim() ?? "";
+  const role_title = (formData.get("role_title") as string | null)?.trim() || null;
+  const sort_order = Number(formData.get("sort_order") || 0);
+  const photo = formData.get("photo");
+
+  if (!full_name) {
+    redirect("/admin/team?error=Name%20is%20required.");
+  }
+  if (!(photo instanceof File) || photo.size === 0) {
+    redirect("/admin/team?error=Photo%20is%20required.");
+  }
+
   try {
-    const supabase = await requireMarketingManagerClient();
-    const full_name = (formData.get("full_name") as string | null)?.trim() ?? "";
-    const role_title = (formData.get("role_title") as string | null)?.trim() || null;
-    const sort_order = Number(formData.get("sort_order") || 0);
-    const photo = formData.get("photo");
-
-    if (!full_name) {
-      redirect("/admin/team?error=Name%20is%20required.");
-    }
-    if (!(photo instanceof File) || photo.size === 0) {
-      redirect("/admin/team?error=Photo%20is%20required.");
-    }
-
     const memberId = crypto.randomUUID();
     const image_url = await uploadMarketingTeamPhoto(memberId, photo);
 
@@ -582,52 +582,52 @@ export async function addMarketingTeamMember(formData: FormData) {
       is_active: formData.get("is_active") === "on",
     });
     if (error) throw new Error(error.message);
-
-    revalidatePath("/", "layout");
-    revalidatePath("/");
-    revalidatePath("/team");
-    revalidatePath("/admin/team");
-    redirect("/admin/team?saved=1");
   } catch (e) {
     redirect(`/admin/team?error=${encodeURIComponent(e instanceof Error ? e.message : "Could not add team member.")}`);
   }
+
+  revalidatePath("/", "layout");
+  revalidatePath("/");
+  revalidatePath("/team");
+  revalidatePath("/admin/team");
+  redirect("/admin/team?saved=1");
 }
 
 export async function updateMarketingTeamMember(formData: FormData) {
+  const supabase = await requireMarketingManagerClient();
+  const id = (formData.get("id") as string | null)?.trim() ?? "";
+  const full_name = (formData.get("full_name") as string | null)?.trim() ?? "";
+  const role_title = (formData.get("role_title") as string | null)?.trim() || null;
+  const sort_order = Number(formData.get("sort_order") || 0);
+  const photo = formData.get("photo");
+
+  if (!id || !full_name) {
+    redirect("/admin/team?error=Missing%20required%20fields.");
+  }
+
+  const payload: Record<string, unknown> = {
+    full_name,
+    role_title,
+    sort_order: Number.isFinite(sort_order) ? sort_order : 0,
+    is_active: formData.get("is_active") === "on",
+  };
+
   try {
-    const supabase = await requireMarketingManagerClient();
-    const id = (formData.get("id") as string | null)?.trim() ?? "";
-    const full_name = (formData.get("full_name") as string | null)?.trim() ?? "";
-    const role_title = (formData.get("role_title") as string | null)?.trim() || null;
-    const sort_order = Number(formData.get("sort_order") || 0);
-    const photo = formData.get("photo");
-
-    if (!id || !full_name) {
-      redirect("/admin/team?error=Missing%20required%20fields.");
-    }
-
-    const payload: Record<string, unknown> = {
-      full_name,
-      role_title,
-      sort_order: Number.isFinite(sort_order) ? sort_order : 0,
-      is_active: formData.get("is_active") === "on",
-    };
-
     if (photo instanceof File && photo.size > 0) {
       payload.image_url = await uploadMarketingTeamPhoto(id, photo);
     }
 
     const { error } = await supabase.from("marketing_team_members").update(payload).eq("id", id);
     if (error) throw new Error(error.message);
-
-    revalidatePath("/", "layout");
-    revalidatePath("/");
-    revalidatePath("/team");
-    revalidatePath("/admin/team");
-    redirect("/admin/team?saved=1");
   } catch (e) {
     redirect(`/admin/team?error=${encodeURIComponent(e instanceof Error ? e.message : "Could not update team member.")}`);
   }
+
+  revalidatePath("/", "layout");
+  revalidatePath("/");
+  revalidatePath("/team");
+  revalidatePath("/admin/team");
+  redirect("/admin/team?saved=1");
 }
 
 export async function deleteMarketingTeamMember(formData: FormData) {
@@ -652,47 +652,47 @@ export async function deleteMarketingTeamMember(formData: FormData) {
 const WEBSITE_FAVICON_PATH = "marketing/branding/website-favicon.png";
 
 export async function updateWebsiteFavicon(formData: FormData) {
-  try {
-    const supabase = await requireMarketingManagerClient();
-    const photo = formData.get("website_favicon");
-    if (!(photo instanceof File) || photo.size === 0) {
-      redirect("/admin/settings?error=Choose%20a%20square%20PNG%20favicon%20to%20upload.");
-    }
-
-    const bytes = new Uint8Array(await photo.arrayBuffer());
-    const validation = validateSquarePngUpload(bytes);
-    if (!validation.ok) {
-      redirect(`/admin/settings?error=${encodeURIComponent(validation.reason)}`);
-    }
-
-    const { error: uploadError } = await supabase.storage.from("clinic-assets").upload(WEBSITE_FAVICON_PATH, bytes, {
-      contentType: "image/png",
-      upsert: true,
-    });
-    if (uploadError) throw new Error(uploadError.message);
-
-    const { data: publicUrl } = supabase.storage.from("clinic-assets").getPublicUrl(WEBSITE_FAVICON_PATH);
-    const website_favicon_url = `${publicUrl.publicUrl}?v=${Date.now()}`;
-
-    const { error } = await supabase.from("marketing_site_settings").upsert(
-      {
-        id: "default",
-        website_favicon_url,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "id" },
-    );
-    if (error) throw new Error(error.message);
-
-    revalidatePath("/", "layout");
-    revalidatePath("/");
-    revalidatePath("/icon");
-    revalidatePath("/apple-icon");
-    revalidatePath("/admin/settings");
-    redirect("/admin/settings?favicon_saved=1");
-  } catch (e) {
-    redirect(`/admin/settings?error=${encodeURIComponent(e instanceof Error ? e.message : "Could not save favicon.")}`);
+  const supabase = await requireMarketingManagerClient();
+  const photo = formData.get("website_favicon");
+  if (!(photo instanceof File) || photo.size === 0) {
+    redirect("/admin/settings?error=Choose%20a%20square%20PNG%20favicon%20to%20upload.");
   }
+
+  const bytes = new Uint8Array(await photo.arrayBuffer());
+  const validation = validateSquarePngUpload(bytes);
+  if (!validation.ok) {
+    redirect(`/admin/settings?error=${encodeURIComponent(validation.reason)}`);
+  }
+
+  const { error: uploadError } = await supabase.storage.from("clinic-assets").upload(WEBSITE_FAVICON_PATH, bytes, {
+    contentType: "image/png",
+    upsert: true,
+  });
+  if (uploadError) {
+    redirect(`/admin/settings?error=${encodeURIComponent(uploadError.message)}`);
+  }
+
+  const { data: publicUrl } = supabase.storage.from("clinic-assets").getPublicUrl(WEBSITE_FAVICON_PATH);
+  const website_favicon_url = `${publicUrl.publicUrl}?v=${Date.now()}`;
+
+  const { error } = await supabase.from("marketing_site_settings").upsert(
+    {
+      id: "default",
+      website_favicon_url,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "id" },
+  );
+  if (error) {
+    redirect(`/admin/settings?error=${encodeURIComponent(error.message)}`);
+  }
+
+  revalidatePath("/", "layout");
+  revalidatePath("/");
+  revalidatePath("/icon");
+  revalidatePath("/apple-icon");
+  revalidatePath("/admin/settings");
+  redirect("/admin/settings?favicon_saved=1");
 }
 
 export async function clearWebsiteFavicon() {

@@ -6,6 +6,15 @@ import { sendOwnerWelcomeEmail } from "./website-api";
 
 const WEBSITE_PROFILE_SPECIES = new Set(PET_SPECIES_BOOKING_OPTIONS.map((o) => o.value));
 
+type OwnerRow = {
+  id: string;
+  phone: string | null;
+  clinic_id: string;
+  full_name?: string | null;
+  email?: string | null;
+  user_id?: string | null;
+};
+
 export function isOwnerPhoneComplete(phone: string | null | undefined): boolean {
   const p = (phone ?? "").trim();
   if (!p || p.toUpperCase() === "NA" || p === "0000000000") return false;
@@ -38,16 +47,83 @@ async function getPrimaryClinicId(supabase: SupabaseClient): Promise<string | nu
   return platformId ?? branded ?? defaultId ?? null;
 }
 
+/** Same idea as website getOwnerPortalContext — tolerate duplicate owner rows. */
+async function resolveOwnerForUser(
+  supabase: SupabaseClient,
+  userId: string,
+  preferredClinicId: string | null,
+  email?: string | null,
+): Promise<OwnerRow | null> {
+  const { data: linkedRows, error: linkedErr } = await supabase
+    .from("owners")
+    .select("id, phone, clinic_id, full_name, email, user_id")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: true });
+
+  if (linkedErr) throw new Error(linkedErr.message);
+
+  const linked = (linkedRows as OwnerRow[] | null) ?? [];
+  if (linked.length) {
+    return linked.find((r) => r.clinic_id === preferredClinicId) ?? linked[0];
+  }
+
+  const emailNorm = email?.trim().toLowerCase() ?? "";
+  if (!emailNorm || !preferredClinicId) return null;
+
+  const { data: guestRows, error: guestErr } = await supabase
+    .from("owners")
+    .select("id, phone, clinic_id, full_name, email, user_id")
+    .eq("clinic_id", preferredClinicId)
+    .is("user_id", null)
+    .eq("email", emailNorm)
+    .order("created_at", { ascending: true })
+    .limit(1);
+
+  if (guestErr) throw new Error(guestErr.message);
+  return ((guestRows as OwnerRow[] | null) ?? [])[0] ?? null;
+}
+
+/** Link website account to mobile: same auth user, same clinic membership + owner row. */
+export async function syncWebsiteAccountForMobile(
+  supabase: SupabaseClient,
+  user: User,
+): Promise<void> {
+  const meta = user.user_metadata as Record<string, string | undefined> | undefined;
+  const displayName = meta?.full_name?.trim() || meta?.name?.trim() || null;
+  const phone = meta?.phone?.trim() || null;
+  await ensurePrimaryClinicMembership(displayName, phone);
+
+  const clinicId = await getPrimaryClinicId(supabase);
+  if (!clinicId) return;
+
+  const owner = await resolveOwnerForUser(supabase, user.id, clinicId, user.email);
+  if (!owner?.id || owner.user_id === user.id) return;
+
+  const { error } = await supabase
+    .from("owners")
+    .update({
+      user_id: user.id,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", owner.id)
+    .is("user_id", null);
+
+  if (error) throw new Error(error.message);
+}
+
 /** Pet owners must have contact phone + at least one active pet before using the app. */
 export async function getPetOwnerProfileStatus(
   supabase: SupabaseClient,
   userId: string,
+  userEmail?: string | null,
 ): Promise<OwnerProfileStatus> {
-  const { data: memberships } = await supabase
+  const { data: memberships, error: membershipErr } = await supabase
     .from("user_clinic_memberships")
     .select("role, clinic_id")
     .eq("user_id", userId)
     .eq("is_active", true);
+
+  if (membershipErr) throw new Error(membershipErr.message);
 
   const rows = memberships ?? [];
   const petOwnerMembership = rows.find((m) => m.role === "pet_owner");
@@ -62,28 +138,49 @@ export async function getPetOwnerProfileStatus(
     return { needsCompletion: true, clinicId: null, ownerId: null };
   }
 
-  const { data: owner } = await supabase
-    .from("owners")
-    .select("id, phone")
-    .eq("user_id", userId)
-    .eq("clinic_id", clinicId)
-    .maybeSingle();
-
-  if (!owner?.id || !isOwnerPhoneComplete(owner.phone as string | null)) {
+  const owner = await resolveOwnerForUser(supabase, userId, clinicId, userEmail);
+  if (!owner?.id || !isOwnerPhoneComplete(owner.phone)) {
     return { needsCompletion: true, clinicId, ownerId: owner?.id ?? null };
   }
 
-  const { count } = await supabase
+  const { count, error: petErr } = await supabase
     .from("pets")
     .select("id", { count: "exact", head: true })
     .eq("owner_id", owner.id)
     .eq("is_active", true);
+
+  if (petErr) throw new Error(petErr.message);
 
   if (!count) {
     return { needsCompletion: true, clinicId, ownerId: owner.id };
   }
 
   return { needsCompletion: false, clinicId, ownerId: owner.id };
+}
+
+export async function loadOwnerProfilePrefill(
+  supabase: SupabaseClient,
+  user: User,
+): Promise<{ fullName: string; phone: string; hasPets: boolean }> {
+  const clinicId = await getPrimaryClinicId(supabase);
+  const owner = clinicId ? await resolveOwnerForUser(supabase, user.id, clinicId, user.email) : null;
+  const meta = user.user_metadata as Record<string, string | undefined> | undefined;
+
+  let hasPets = false;
+  if (owner?.id) {
+    const { count } = await supabase
+      .from("pets")
+      .select("id", { count: "exact", head: true })
+      .eq("owner_id", owner.id)
+      .eq("is_active", true);
+    hasPets = (count ?? 0) > 0;
+  }
+
+  return {
+    fullName: owner?.full_name?.trim() || meta?.full_name?.trim() || meta?.name?.trim() || "",
+    phone: isOwnerPhoneComplete(owner?.phone) ? (owner?.phone ?? "").trim() : meta?.phone?.trim() || "",
+    hasPets,
+  };
 }
 
 export async function completeOwnerProfileWithPet(
@@ -109,48 +206,31 @@ export async function completeOwnerProfileWithPet(
   const phone = input.phone.trim();
   const petName = input.petName.trim();
   const species = normalizeLegacySpeciesToCanonical(input.species.trim());
-  if (!fullName || !phone || !petName) {
-    throw new Error("Full name, phone, and pet name are required.");
+  if (!fullName || !phone) {
+    throw new Error("Full name and phone are required.");
   }
   if (!species || !WEBSITE_PROFILE_SPECIES.has(species)) {
     throw new Error("A valid pet species is required.");
   }
 
   const emailNorm = user.email?.trim().toLowerCase() ?? "";
-  let ownerId: string | null = null;
+  let owner = await resolveOwnerForUser(supabase, user.id, clinicId, user.email);
 
-  const { data: existingOwner, error: existingOwnerError } = await supabase
-    .from("owners")
-    .select("id")
-    .eq("clinic_id", clinicId)
-    .eq("user_id", user.id)
-    .maybeSingle();
-  if (existingOwnerError) throw new Error(existingOwnerError.message);
-
-  if (existingOwner?.id) {
-    ownerId = existingOwner.id;
+  if (owner?.id) {
     const { error: updateOwnerError } = await supabase
       .from("owners")
       .update({
         full_name: fullName,
         phone,
-        email: emailNorm || null,
+        email: emailNorm || owner.email || null,
+        user_id: user.id,
         updated_at: new Date().toISOString(),
       })
-      .eq("id", ownerId);
+      .eq("id", owner.id);
     if (updateOwnerError) throw new Error(updateOwnerError.message);
   } else if (emailNorm) {
-    const { data: guestOwner, error: guestOwnerError } = await supabase
-      .from("owners")
-      .select("id")
-      .eq("clinic_id", clinicId)
-      .is("user_id", null)
-      .eq("email", emailNorm)
-      .maybeSingle();
-    if (guestOwnerError) throw new Error(guestOwnerError.message);
-
-    if (guestOwner?.id) {
-      ownerId = guestOwner.id;
+    const guest = await resolveOwnerForUser(supabase, user.id, clinicId, user.email);
+    if (guest?.id) {
       const { error: mergeOwnerError } = await supabase
         .from("owners")
         .update({
@@ -160,13 +240,16 @@ export async function completeOwnerProfileWithPet(
           email: emailNorm,
           updated_at: new Date().toISOString(),
         })
-        .eq("id", guestOwner.id);
+        .eq("id", guest.id);
       if (mergeOwnerError) throw new Error(mergeOwnerError.message);
+      owner = { ...guest, id: guest.id };
     }
   }
 
+  let ownerId = owner?.id ?? null;
+
   if (!ownerId) {
-    const { data: insertedOwner, error: insertOwnerError } = await supabase
+    const { data: insertedRows, error: insertOwnerError } = await supabase
       .from("owners")
       .insert({
         clinic_id: clinicId,
@@ -176,18 +259,23 @@ export async function completeOwnerProfileWithPet(
         email: emailNorm || null,
       })
       .select("id")
-      .single();
+      .limit(1);
+
     if (insertOwnerError) throw new Error(insertOwnerError.message);
-    ownerId = insertedOwner.id;
+    ownerId = ((insertedRows as Array<{ id: string }> | null) ?? [])[0]?.id ?? null;
+    if (!ownerId) throw new Error("Could not create owner profile.");
   }
 
-  const { count: petCount } = await supabase
+  const { count: petCount, error: petCountErr } = await supabase
     .from("pets")
     .select("id", { count: "exact", head: true })
     .eq("owner_id", ownerId)
     .eq("is_active", true);
 
+  if (petCountErr) throw new Error(petCountErr.message);
+
   if (!petCount) {
+    if (!petName) throw new Error("Pet name is required for your first pet.");
     const { error: insertPetError } = await supabase.from("pets").insert({
       clinic_id: clinicId,
       owner_id: ownerId,

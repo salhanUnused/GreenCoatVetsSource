@@ -18,9 +18,11 @@ import { supabase } from "../lib/supabase";
 import { theme, shadows } from "../theme/theme";
 import { AppAmbientBackground } from "../components/AppAmbientBackground";
 import { PawCircularLoader } from "../components/PawCircularLoader";
-import { loadPlatformBranding, type PlatformBranding } from "../lib/platform-branding";
+import { loadAppBranding, type AppBranding } from "../lib/app-branding";
 import { mapAuthError } from "../lib/mapAuthError";
-import { linkPrimaryClinicAfterAuth, signInWithGoogle } from "../lib/google-auth";
+import { ensurePrimaryClinicMembership } from "../lib/ensure-clinic-membership";
+import { syncWebsiteAccountForMobile } from "../lib/owner-profile";
+import { signInWithGoogle } from "../lib/google-auth";
 
 export function AuthScreen() {
   const [mode, setMode] = useState<"login" | "signup">("login");
@@ -31,11 +33,11 @@ export function AuthScreen() {
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [branding, setBranding] = useState<PlatformBranding | null>(null);
+  const [branding, setBranding] = useState<AppBranding | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    loadPlatformBranding().then((b) => {
+    loadAppBranding().then((b) => {
       if (!cancelled) setBranding(b);
     });
     return () => {
@@ -44,7 +46,14 @@ export function AuthScreen() {
   }, []);
 
   async function ensurePrimaryClinicCustomerLink(name?: string, phoneNumber?: string) {
-    await linkPrimaryClinicAfterAuth(name, phoneNumber);
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user) {
+      await syncWebsiteAccountForMobile(supabase, user);
+      return;
+    }
+    await ensurePrimaryClinicMembership(name, phoneNumber);
   }
 
   async function onGoogleAuth() {
@@ -52,14 +61,7 @@ export function AuthScreen() {
     setError(null);
     try {
       await signInWithGoogle();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      const meta = user?.user_metadata as { full_name?: string; name?: string; phone?: string } | undefined;
-      await ensurePrimaryClinicCustomerLink(
-        meta?.full_name ?? meta?.name ?? (mode === "signup" ? fullName : undefined),
-        meta?.phone ?? (mode === "signup" ? phone : undefined),
-      );
+      await ensurePrimaryClinicCustomerLink();
     } catch (e) {
       setError(e instanceof Error ? mapAuthError(e.message) : "Google sign-in failed.");
     }
@@ -118,6 +120,7 @@ export function AuthScreen() {
             )}
             <Text style={styles.brandTitle}>{branding?.product_name ?? "GreenCoatVets"}</Text>
             <Text style={styles.tagline}>Clinical operations, simplified.</Text>
+            <Text style={styles.hint}>Already registered on greencoatvets.com? Use Continue with Google or log in with the same email.</Text>
           </View>
 
           <View style={styles.cardBlock}>
@@ -309,6 +312,14 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     color: theme.onSurfaceVariant,
     textAlign: "center",
+  },
+  hint: {
+    marginTop: 10,
+    fontSize: 12,
+    lineHeight: 18,
+    color: theme.onSurfaceVariant,
+    textAlign: "center",
+    paddingHorizontal: 8,
   },
   cardBlock: {
     gap: 14,

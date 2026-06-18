@@ -67,8 +67,7 @@ import { PawCircularLoader } from "./src/components/PawCircularLoader";
 import { loadAppBranding, type AppBranding } from "./src/lib/app-branding";
 import { promptOpenOrSharePdf } from "./src/lib/open-or-share-document";
 import { createSessionFromUrl, isOAuthCallbackUrl } from "./src/lib/google-auth";
-import { ensurePrimaryClinicMembership } from "./src/lib/ensure-clinic-membership";
-import { getPetOwnerProfileStatus } from "./src/lib/owner-profile";
+import { getPetOwnerProfileStatus, syncWebsiteAccountForMobile } from "./src/lib/owner-profile";
 import { OwnerShopScreen } from "./src/screens/owner/OwnerShopScreen";
 import { OwnerReportsScreen } from "./src/screens/owner/OwnerReportsScreen";
 import { notifyAppointmentBookingEmails } from "./src/lib/website-api";
@@ -112,10 +111,6 @@ export default function App() {
     });
     const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession);
-      if (nextSession?.user?.id) {
-        const meta = nextSession.user.user_metadata as Record<string, string | undefined> | undefined;
-        void ensurePrimaryClinicMembership(meta?.full_name || meta?.name || null, meta?.phone ?? null).catch(() => undefined);
-      }
     });
     return () => listener.subscription.unsubscribe();
   }, []);
@@ -128,16 +123,18 @@ export default function App() {
     }
     let cancelled = false;
     setProfileCheckLoading(true);
-    void getPetOwnerProfileStatus(supabase, session.user.id)
-      .then((status) => {
+    void (async () => {
+      try {
+        const user = session.user;
+        await syncWebsiteAccountForMobile(supabase, user);
+        const status = await getPetOwnerProfileStatus(supabase, user.id, user.email);
         if (!cancelled) setNeedsProfileCompletion(status.needsCompletion);
-      })
-      .catch(() => {
+      } catch {
         if (!cancelled) setNeedsProfileCompletion(false);
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) setProfileCheckLoading(false);
-      });
+      }
+    })();
     return () => {
       cancelled = true;
     };
@@ -303,14 +300,22 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
       return;
     }
 
-    let { data: membershipData } = await supabase
+    let { data: membershipRows, error: membershipQueryError } = await supabase
       .from("user_clinic_memberships")
       .select("clinic_id, role")
       .eq("user_id", user.id)
       .eq("is_active", true)
-      .order("updated_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .order("updated_at", { ascending: false });
+
+    if (membershipQueryError) {
+      console.warn("membership query", membershipQueryError.message);
+    }
+
+    let membershipData = ((membershipRows as Array<{ clinic_id: string; role: string }> | null) ?? [])[0] ?? null;
+    const petOwnerMembership = ((membershipRows as Array<{ clinic_id: string; role: string }> | null) ?? []).find(
+      (m) => m.role === "pet_owner",
+    );
+    if (petOwnerMembership) membershipData = petOwnerMembership;
 
     if (!membershipData) {
       const pending = await loadPendingInvite();
@@ -328,30 +333,29 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
             .select("clinic_id, role")
             .eq("user_id", user.id)
             .eq("is_active", true)
-            .order("updated_at", { ascending: false })
-            .limit(1)
-            .maybeSingle();
-          membershipData = retry.data;
+            .order("updated_at", { ascending: false });
+          membershipData = ((retry.data as Array<{ clinic_id: string; role: string }> | null) ?? []).find(
+            (m) => m.role === "pet_owner",
+          ) ?? ((retry.data as Array<{ clinic_id: string; role: string }> | null) ?? [])[0] ?? null;
         }
       }
     }
 
     if (!membershipData) {
       try {
-        const meta = user.user_metadata as Record<string, string | undefined> | undefined;
-        const displayName = meta?.full_name || meta?.name || null;
-        await ensurePrimaryClinicMembership(displayName, meta?.phone ?? null);
+        await syncWebsiteAccountForMobile(supabase, user);
         const retry = await supabase
           .from("user_clinic_memberships")
           .select("clinic_id, role")
           .eq("user_id", user.id)
           .eq("is_active", true)
-          .order("updated_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        membershipData = retry.data;
+          .order("updated_at", { ascending: false });
+        membershipData =
+          ((retry.data as Array<{ clinic_id: string; role: string }> | null) ?? []).find((m) => m.role === "pet_owner") ??
+          ((retry.data as Array<{ clinic_id: string; role: string }> | null) ?? [])[0] ??
+          null;
       } catch (ensureErr) {
-        console.warn("ensurePrimaryClinicMembership", ensureErr instanceof Error ? ensureErr.message : ensureErr);
+        console.warn("syncWebsiteAccountForMobile", ensureErr instanceof Error ? ensureErr.message : ensureErr);
       }
     }
 

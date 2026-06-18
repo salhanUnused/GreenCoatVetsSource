@@ -10,16 +10,18 @@ export async function ensurePetOwnerRow(
   clinicId: string,
   user: User
 ): Promise<{ ownerId: string | null; error: Error | null }> {
-  const { data: existing, error: selErr } = await supabase
+  const { data: existingRows, error: selErr } = await supabase
     .from("owners")
     .select("id")
     .eq("clinic_id", clinicId)
     .eq("user_id", user.id)
-    .maybeSingle();
+    .order("created_at", { ascending: true })
+    .limit(1);
 
   if (selErr) {
     return { ownerId: null, error: new Error(selErr.message) };
   }
+  const existing = ((existingRows as Array<{ id: string }> | null) ?? [])[0];
   if (existing?.id) {
     return { ownerId: existing.id, error: null };
   }

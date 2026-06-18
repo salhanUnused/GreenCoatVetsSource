@@ -2,6 +2,7 @@ import { normalizeLegacySpeciesToCanonical, PET_SPECIES_BOOKING_OPTIONS } from "
 import type { User } from "@supabase/supabase-js";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ensurePrimaryClinicMembership } from "./ensure-clinic-membership";
+import { forceAssignOnlyClinic } from "./membership";
 import { sendOwnerWelcomeEmail } from "./website-api";
 
 const WEBSITE_PROFILE_SPECIES = new Set(PET_SPECIES_BOOKING_OPTIONS.map((o) => o.value));
@@ -44,7 +45,14 @@ async function getPrimaryClinicId(supabase: SupabaseClient): Promise<string | nu
   const defaultId = (marketing as { default_clinic_id?: string | null } | null)?.default_clinic_id;
   const platformId = (branding as { primary_clinic_id?: string | null } | null)?.primary_clinic_id;
 
-  return platformId ?? branded ?? defaultId ?? null;
+  const resolved = platformId ?? branded ?? defaultId ?? null;
+  if (resolved) return resolved;
+
+  try {
+    return await forceAssignOnlyClinic("pet_owner");
+  } catch {
+    return null;
+  }
 }
 
 /** Same idea as website getOwnerPortalContext — tolerate duplicate owner rows. */
@@ -133,7 +141,14 @@ export async function getPetOwnerProfileStatus(
     return { needsCompletion: false, clinicId: null, ownerId: null };
   }
 
-  const clinicId = petOwnerMembership?.clinic_id ?? (await getPrimaryClinicId(supabase));
+  let clinicId = petOwnerMembership?.clinic_id ?? (await getPrimaryClinicId(supabase));
+  if (!clinicId) {
+    try {
+      clinicId = await forceAssignOnlyClinic("pet_owner");
+    } catch {
+      clinicId = null;
+    }
+  }
   if (!clinicId) {
     return { needsCompletion: true, clinicId: null, ownerId: null };
   }
@@ -199,7 +214,7 @@ export async function completeOwnerProfileWithPet(
     microchipId?: string | null;
   },
 ): Promise<void> {
-  const clinicId = await getPrimaryClinicId(supabase);
+  const clinicId = (await getPrimaryClinicId(supabase)) ?? (await forceAssignOnlyClinic("pet_owner"));
   if (!clinicId) throw new Error("Clinic is not configured for this app.");
 
   const fullName = input.fullName.trim();

@@ -1,5 +1,6 @@
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { formatPrescriptionItemLine } from "../lib/formatPrescription";
+import { OwnerNeonCard } from "../components/OwnerNeonCard";
 import { commonStyles } from "../theme/commonStyles";
 import { theme } from "../theme/theme";
 import type { OwnerPrescription, OwnerVisitReport } from "../types/app";
@@ -45,7 +46,7 @@ export function OwnerHealthScreen({
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} colors={[theme.primary]} />
       }
     >
-      <View style={commonStyles.card}>
+      <OwnerNeonCard>
         <Text style={commonStyles.cardTitle}>Prescriptions</Text>
         <Text style={[commonStyles.muted, { marginBottom: 12 }]}>
           Medicines recorded at the clinic for your pets. Lines match what staff saved on the visit.
@@ -91,9 +92,9 @@ export function OwnerHealthScreen({
           );
         })}
         {!prescriptions.length ? <Text style={commonStyles.emptyState}>No prescriptions on file.</Text> : null}
-      </View>
+      </OwnerNeonCard>
 
-      <View style={commonStyles.card}>
+      <OwnerNeonCard>
         <Text style={commonStyles.cardTitle}>Vaccinations</Text>
         {vaccinations.map((vaccination, i) => (
           <View
@@ -109,9 +110,9 @@ export function OwnerHealthScreen({
           </View>
         ))}
         {!vaccinations.length ? <Text style={commonStyles.emptyState}>No vaccination records.</Text> : null}
-      </View>
+      </OwnerNeonCard>
 
-      <View style={commonStyles.card}>
+      <OwnerNeonCard>
         <Text style={commonStyles.cardTitle}>Visit reports (PDF)</Text>
         <Text style={[commonStyles.muted, { marginBottom: 12 }]}>
           Summary PDFs generated after visits — same as in your clinic portal.
@@ -133,9 +134,9 @@ export function OwnerHealthScreen({
           </View>
         ))}
         {!visitReports.length ? <Text style={commonStyles.emptyState}>No visit reports yet.</Text> : null}
-      </View>
+      </OwnerNeonCard>
 
-      <View style={commonStyles.card}>
+      <OwnerNeonCard>
         <Text style={commonStyles.cardTitle}>Files from visits</Text>
         <Text style={[commonStyles.muted, { marginBottom: 12 }]}>
           Documents the clinic attached to visits (lab results, images, etc.).
@@ -155,7 +156,7 @@ export function OwnerHealthScreen({
           </View>
         ))}
         {!attachments.length ? <Text style={commonStyles.emptyState}>No attachments yet.</Text> : null}
-      </View>
+      </OwnerNeonCard>
     </ScrollView>
   );
 }

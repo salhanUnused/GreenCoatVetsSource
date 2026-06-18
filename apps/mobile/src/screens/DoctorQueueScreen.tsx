@@ -4,30 +4,61 @@ import { useNavigation } from "@react-navigation/native";
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import { AppointmentStatusPicker } from "../components/AppointmentStatusPicker";
 import { DoctorStackParamList } from "../navigation/types";
 import { Appointment, DoctorNotification } from "../types/app";
 import { commonStyles } from "../theme/commonStyles";
 import { theme } from "../theme/theme";
 import { PetAvatar } from "../components/PetAvatar";
 
-type FilterKey = "upcoming" | "ongoing" | "completed" | "emergency";
+type FilterKey = "all" | "upcoming" | "ongoing" | "completed" | "emergency";
+
+function startOfDay(d: Date) {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x;
+}
+
+function isSameDay(a: Date, b: Date) {
+  return startOfDay(a).getTime() === startOfDay(b).getTime();
+}
+
+function formatQueueDate(d: Date) {
+  const today = startOfDay(new Date());
+  const target = startOfDay(d);
+  if (target.getTime() === today.getTime()) return "Today";
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  if (target.getTime() === tomorrow.getTime()) return "Tomorrow";
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (target.getTime() === yesterday.getTime()) return "Yesterday";
+  return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+}
 
 export function DoctorQueueScreen({
   appointments,
+  queueDate,
+  onQueueDateChange,
   onStatusChange,
+  onUploadDocument,
   notifications,
   refreshing,
   onRefresh,
 }: {
   appointments: Appointment[];
+  queueDate: Date;
+  onQueueDateChange: (date: Date) => void;
   onStatusChange: (appointmentId: string, status: string) => Promise<void>;
+  onUploadDocument: (appointmentId: string) => Promise<void>;
   notifications: DoctorNotification[];
   refreshing: boolean;
   onRefresh: () => void;
 }) {
   const navigation = useNavigation<NativeStackNavigationProp<DoctorStackParamList>>();
-  const [filter, setFilter] = useState<FilterKey>("upcoming");
+  const [filter, setFilter] = useState<FilterKey>("all");
   const [query, setQuery] = useState("");
+  const [statusPickerFor, setStatusPickerFor] = useState<Appointment | null>(null);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -48,6 +79,16 @@ export function DoctorQueueScreen({
   const emergencyCount = appointments.filter((a) => (a.appointment_type ?? "").toLowerCase() === "emergency").length;
   const nextUp = filtered.find((a) => a.status !== "completed" && a.status !== "cancelled" && a.status !== "no_show");
 
+  function shiftDate(days: number) {
+    const d = new Date(queueDate);
+    d.setDate(d.getDate() + days);
+    onQueueDateChange(startOfDay(d));
+  }
+
+  async function openConsult(appointmentId: string) {
+    navigation.navigate("Consult", { appointmentId });
+  }
+
   return (
     <ScrollView
       style={commonStyles.screen}
@@ -56,27 +97,47 @@ export function DoctorQueueScreen({
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} colors={[theme.primary]} />
       }
     >
+      <View style={styles.dateRow}>
+        <Pressable style={styles.dateNavBtn} onPress={() => shiftDate(-1)} accessibilityLabel="Previous day">
+          <MaterialIcons name="chevron-left" size={24} color={theme.primary} />
+        </Pressable>
+        <Pressable style={styles.dateCenter} onPress={() => onQueueDateChange(startOfDay(new Date()))}>
+          <Text style={styles.dateLabel}>{formatQueueDate(queueDate)}</Text>
+          <Text style={commonStyles.muted}>{queueDate.toLocaleDateString()}</Text>
+        </Pressable>
+        <Pressable style={styles.dateNavBtn} onPress={() => shiftDate(1)} accessibilityLabel="Next day">
+          <MaterialIcons name="chevron-right" size={24} color={theme.primary} />
+        </Pressable>
+      </View>
+      {!isSameDay(queueDate, new Date()) ? (
+        <Pressable style={styles.todayBtn} onPress={() => onQueueDateChange(startOfDay(new Date()))}>
+          <Text style={styles.todayBtnText}>Jump to today</Text>
+        </Pressable>
+      ) : null}
+
       {nextUp ? (
         <LinearGradient colors={[theme.primaryContainer, theme.primary]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.hero}>
           <Text style={styles.heroOverline}>Next up</Text>
           <View style={styles.heroRow}>
             <View style={{ flex: 1 }}>
               <Text style={styles.heroPet}>{nextUp.pets?.name ?? "Pet"}</Text>
-              <Text style={styles.heroMeta}>{nextUp.pets?.breed ?? nextUp.pets?.species ?? "Pet"} · {new Date(nextUp.starts_at).toLocaleTimeString()}</Text>
+              <Text style={styles.heroMeta}>
+                {nextUp.pets?.breed ?? nextUp.pets?.species ?? "Pet"} · {new Date(nextUp.starts_at).toLocaleTimeString()}
+              </Text>
               <Text style={styles.heroOwner}>{nextUp.owners?.full_name ?? "Owner"}</Text>
             </View>
-            <Pressable style={styles.heroBtn} onPress={() => navigation.navigate("Consult", { appointmentId: nextUp.id })}>
+            <Pressable style={styles.heroBtn} onPress={() => void openConsult(nextUp.id)}>
               <MaterialIcons name="play-circle" size={18} color={theme.primary} />
-              <Text style={styles.heroBtnText}>Start</Text>
+              <Text style={styles.heroBtnText}>Open</Text>
             </Pressable>
           </View>
         </LinearGradient>
       ) : null}
 
       <View style={[commonStyles.card, styles.glassCard]}>
-        <Text style={commonStyles.cardTitle}>Today&apos;s queue</Text>
+        <Text style={commonStyles.cardTitle}>Appointments</Text>
         <Text style={[commonStyles.muted, { marginBottom: 12 }]}>
-          Filters and search keep consultation flow fast.
+          Tap a row to open the visit. Change status or upload lab reports and documents.
         </Text>
         <TextInput
           style={[commonStyles.input, styles.searchInput]}
@@ -89,6 +150,7 @@ export function DoctorQueueScreen({
         <View style={styles.chips}>
           {(
             [
+              ["all", "All"],
               ["upcoming", "Upcoming"],
               ["ongoing", "Ongoing"],
               ["completed", "Completed"],
@@ -101,52 +163,78 @@ export function DoctorQueueScreen({
           ))}
         </View>
         <View style={styles.metaRow}>
-          <Text style={commonStyles.muted}>Emergency cases: {emergencyCount}</Text>
-          <Text style={commonStyles.muted}>Alerts: {notifications.length}</Text>
+          <Text style={commonStyles.muted}>{appointments.length} on this day</Text>
+          <Text style={commonStyles.muted}>Emergency: {emergencyCount} · Alerts: {notifications.length}</Text>
         </View>
 
         <View style={styles.queueWrap}>
-        {filtered.map((appointment, index) => (
-          <View style={[styles.queueItem, index === 0 && styles.queueItemFirst]} key={appointment.id}>
-            <Pressable onPress={() => navigation.navigate("Consult", { appointmentId: appointment.id })}>
-              <View style={styles.queueHeader}>
-                <View style={styles.timeBox}>
-                  <Text style={styles.timeHour}>{new Date(appointment.starts_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</Text>
-                </View>
-                <PetAvatar uri={appointment.pets?.photo_url} size={38} />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.timeText}>{appointment.pets?.name ?? "Pet"}</Text>
-                  <Text style={commonStyles.muted}>
-                    {appointment.pets?.name ?? "Pet"} · {appointment.owners?.full_name ?? "Owner"} · {appointment.branches?.name ?? "Branch"}
-                  </Text>
-                  <View style={[styles.statusChip, chipForStatus(appointment.status)]}>
-                    <Text style={styles.statusChipText}>
-                      {(appointment.appointment_type ?? "").toLowerCase() === "emergency" ? "Emergency" : appointment.status}
+          {filtered.map((appointment, index) => (
+            <View style={[styles.queueItem, index === 0 && styles.queueItemFirst]} key={appointment.id}>
+              <Pressable onPress={() => void openConsult(appointment.id)}>
+                <View style={styles.queueHeader}>
+                  <View style={styles.timeBox}>
+                    <Text style={styles.timeHour}>
+                      {new Date(appointment.starts_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                     </Text>
                   </View>
+                  <PetAvatar uri={appointment.pets?.photo_url} size={38} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.timeText}>{appointment.pets?.name ?? "Pet"}</Text>
+                    <Text style={commonStyles.muted}>
+                      {appointment.owners?.full_name ?? "Owner"} · {appointment.branches?.name ?? "Branch"}
+                      {!appointment.doctor_id ? " · Unassigned" : ""}
+                    </Text>
+                    <View style={[styles.statusChip, chipForStatus(appointment.status)]}>
+                      <Text style={styles.statusChipText}>
+                        {(appointment.appointment_type ?? "").toLowerCase() === "emergency" ? "Emergency · " : ""}
+                        {appointment.status.replaceAll("_", " ")}
+                      </Text>
+                    </View>
+                  </View>
+                  <MaterialIcons name="chevron-right" size={22} color={theme.outline} />
                 </View>
-                <MaterialIcons name="chevron-right" size={22} color={theme.outline} />
+              </Pressable>
+              <View style={commonStyles.actionRow}>
+                {appointment.status === "scheduled" ? (
+                  <Pressable style={commonStyles.btnOutline} onPress={() => void onStatusChange(appointment.id, "checked_in")}>
+                    <Text style={commonStyles.btnOutlineText}>Check-in</Text>
+                  </Pressable>
+                ) : null}
+                <Pressable style={commonStyles.btnPrimary} onPress={() => void openConsult(appointment.id)}>
+                  <Text style={commonStyles.btnPrimaryText}>Open visit</Text>
+                </Pressable>
+                <Pressable style={commonStyles.btnOutline} onPress={() => setStatusPickerFor(appointment)}>
+                  <Text style={commonStyles.btnOutlineText}>Status</Text>
+                </Pressable>
+                <Pressable style={commonStyles.btnOutline} onPress={() => void onUploadDocument(appointment.id)}>
+                  <Text style={commonStyles.btnOutlineText}>Upload</Text>
+                </Pressable>
+                {appointment.status !== "cancelled" && appointment.status !== "completed" ? (
+                  <>
+                    <Pressable style={commonStyles.btnOutline} onPress={() => void onStatusChange(appointment.id, "cancelled")}>
+                      <Text style={commonStyles.btnOutlineText}>Cancel</Text>
+                    </Pressable>
+                    <Pressable style={commonStyles.btnOutline} onPress={() => void onStatusChange(appointment.id, "no_show")}>
+                      <Text style={commonStyles.btnOutlineText}>No-show</Text>
+                    </Pressable>
+                  </>
+                ) : null}
               </View>
-            </Pressable>
-            <View style={commonStyles.actionRow}>
-              <Pressable style={commonStyles.btnOutline} onPress={() => onStatusChange(appointment.id, "checked_in")}>
-                <Text style={commonStyles.btnOutlineText}>Check-in</Text>
-              </Pressable>
-              <Pressable
-                style={commonStyles.btnPrimary}
-                onPress={() => navigation.navigate("Consult", { appointmentId: appointment.id })}
-              >
-                <Text style={commonStyles.btnPrimaryText}>Start consultation</Text>
-              </Pressable>
-              <Pressable style={commonStyles.btnOutline} onPress={() => onStatusChange(appointment.id, "completed")}>
-                <Text style={commonStyles.btnOutlineText}>Complete</Text>
-              </Pressable>
             </View>
-          </View>
-        ))}
+          ))}
         </View>
         {!filtered.length ? <Text style={commonStyles.emptyState}>No appointments for this filter.</Text> : null}
       </View>
+
+      <AppointmentStatusPicker
+        visible={!!statusPickerFor}
+        currentStatus={statusPickerFor?.status ?? "scheduled"}
+        onClose={() => setStatusPickerFor(null)}
+        onSelect={(status) => {
+          if (!statusPickerFor) return;
+          void onStatusChange(statusPickerFor.id, status);
+        }}
+      />
     </ScrollView>
   );
 }
@@ -156,11 +244,32 @@ function chipForStatus(status: string) {
   if (s === "completed") return { backgroundColor: `${theme.outlineVariant}66`, borderColor: `${theme.outline}44` };
   if (s === "checked_in") return { backgroundColor: `${theme.primaryFixedDim}55`, borderColor: `${theme.primary}44` };
   if (s === "scheduled") return { backgroundColor: `${theme.secondaryContainer}66`, borderColor: `${theme.secondary}44` };
+  if (s === "cancelled" || s === "no_show") return { backgroundColor: `${theme.errorContainer}88`, borderColor: `${theme.error}44` };
   return { backgroundColor: `${theme.primaryContainer}66`, borderColor: `${theme.tertiary}44` };
 }
 
 const styles = StyleSheet.create({
   pagePad: { paddingTop: 8, paddingBottom: 44 },
+  dateRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 8,
+    gap: 8,
+  },
+  dateNavBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: theme.outlineVariant,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: theme.surfaceBright,
+  },
+  dateCenter: { flex: 1, alignItems: "center", paddingVertical: 6 },
+  dateLabel: { fontSize: 18, fontWeight: "900", color: theme.onSurface },
+  todayBtn: { alignSelf: "center", marginBottom: 8, paddingHorizontal: 12, paddingVertical: 6 },
+  todayBtnText: { color: theme.primary, fontWeight: "800", fontSize: 13 },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 10 },
   chip: {
     paddingHorizontal: 12,

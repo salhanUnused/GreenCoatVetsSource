@@ -36,15 +36,22 @@ import { OwnerBookingScreen } from "./src/screens/OwnerBookingScreen";
 import { AuthScreen } from "./src/screens/AuthScreen";
 import { WelcomeScreen } from "./src/screens/WelcomeScreen";
 import { WelcomeSplashScreen } from "./src/screens/WelcomeSplashScreen";
-import { WebOnlySuperAdminScreen } from "./src/screens/WebOnlySuperAdminScreen";
+import { WebOnlyMarketingEditorScreen } from "./src/screens/WebOnlyMarketingEditorScreen";
 import { DoctorNavigator } from "./src/screens/DoctorNavigator";
 import { OwnerDashboardScreen } from "./src/screens/owner/OwnerDashboardScreen";
 import { OwnerPetsScreen } from "./src/screens/owner/OwnerPetsScreen";
-import { ReceptionDeskScreen } from "./src/screens/ReceptionDeskScreen";
+import { ReceptionQueueScreen } from "./src/screens/staff/ReceptionQueueScreen";
+import { ClinicPrescriptionsScreen } from "./src/screens/staff/ClinicPrescriptionsScreen";
+import { SeniorVideoCallsScreen } from "./src/screens/staff/SeniorVideoCallsScreen";
 import { AdminMobileStatsScreen } from "./src/screens/AdminMobileStatsScreen";
 import { LabPharmacyHubScreen } from "./src/screens/LabPharmacyHubScreen";
 import { InviteQrMobileScreen } from "./src/screens/InviteQrMobileScreen";
 import { StaffProfileScreen } from "./src/screens/StaffProfileScreen";
+import { StaffAppointmentsCalendarScreen } from "./src/screens/staff/StaffAppointmentsCalendarScreen";
+import { AdminPatientsScreen } from "./src/screens/staff/AdminPatientsScreen";
+import { OwnerReportsScreen } from "./src/screens/owner/OwnerReportsScreen";
+import { pickActiveMembership, forceAssignOnlyClinic, isDoctorRole, isRegularDoctorRole, isSeniorDoctorRole, resolveSuperAdminClinicId } from "./src/lib/membership";
+import { ProfileMenuSheet } from "./src/components/ProfileMenuSheet";
 import {
   AdminMobileStats,
   Appointment,
@@ -68,8 +75,6 @@ import { loadAppBranding, type AppBranding } from "./src/lib/app-branding";
 import { promptOpenOrSharePdf } from "./src/lib/open-or-share-document";
 import { createSessionFromUrl, isOAuthCallbackUrl } from "./src/lib/google-auth";
 import { getPetOwnerProfileStatus, syncWebsiteAccountForMobile } from "./src/lib/owner-profile";
-import { OwnerShopScreen } from "./src/screens/owner/OwnerShopScreen";
-import { OwnerReportsScreen } from "./src/screens/owner/OwnerReportsScreen";
 import { notifyAppointmentBookingEmails } from "./src/lib/website-api";
 import { CompleteProfileScreen } from "./src/screens/CompleteProfileScreen";
 import { WalkInScreen } from "./src/screens/WalkInScreen";
@@ -126,6 +131,24 @@ export default function App() {
     void (async () => {
       try {
         const user = session.user;
+        const { data: platformAdmin } = await supabase
+          .from("platform_super_admins")
+          .select("user_id")
+          .eq("user_id", user.id)
+          .maybeSingle();
+        if (platformAdmin) {
+          if (!cancelled) setNeedsProfileCompletion(false);
+          return;
+        }
+        const { data: memberships } = await supabase
+          .from("user_clinic_memberships")
+          .select("role")
+          .eq("user_id", user.id)
+          .eq("is_active", true);
+        if ((memberships ?? []).some((m) => m.role === "marketing_editor")) {
+          if (!cancelled) setNeedsProfileCompletion(false);
+          return;
+        }
         await syncWebsiteAccountForMobile(supabase, user);
         const status = await getPetOwnerProfileStatus(supabase, user.id, user.email);
         if (!cancelled) setNeedsProfileCompletion(status.needsCompletion);
@@ -171,14 +194,14 @@ export default function App() {
       ) : (
         <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
           <StatusBar style="dark" />
-          <MobileHome onSignOut={() => supabase.auth.signOut()} />
+          <MobileHome onSignOut={() => supabase.auth.signOut()} userEmail={session.user.email} />
         </SafeAreaView>
       )}
     </SafeAreaProvider>
   );
 }
 
-function MobileHome({ onSignOut }: { onSignOut: () => void }) {
+function MobileHome({ onSignOut, userEmail }: { onSignOut: () => void; userEmail?: string | null }) {
   const insets = useSafeAreaInsets();
   const [profileOpen, setProfileOpen] = useState(false);
   const [membership, setMembership] = useState<Membership | null>(null);
@@ -215,9 +238,9 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
   const [products, setProducts] = useState<ProductListItem[]>([]);
   const [visitSummaries, setVisitSummaries] = useState<VisitSummary[]>([]);
   const [adminStats, setAdminStats] = useState<AdminMobileStats | null>(null);
-  const [clinicRecentOrders, setClinicRecentOrders] = useState<
-    Array<{ id: string; status: string; grand_total: number | null; placed_at: string | null }>
-  >([]);
+  const [adminVisitSummaries, setAdminVisitSummaries] = useState<OwnerVisitSummaryRow[]>([]);
+  const [clinicReportsEnabled, setClinicReportsEnabled] = useState(true);
+  const [downloadingAdminReports, setDownloadingAdminReports] = useState(false);
   const [clinicRecentPrescriptions, setClinicRecentPrescriptions] = useState<
     Array<{ id: string; issued_at: string; notes: string | null; pdf_url: string | null; pets?: { name?: string | null } | null }>
   >([]);
@@ -265,7 +288,6 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
 
   async function loadData(queueDateOverride?: Date) {
     setLoading(true);
-    setClinicRecentOrders([]);
     setClinicRecentPrescriptions([]);
     setMembership(null);
     setDoctorStaffId(null);
@@ -277,6 +299,7 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
     setProducts([]);
     setVisitSummaries([]);
     setAdminStats(null);
+    setAdminVisitSummaries([]);
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -294,11 +317,7 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
       .eq("user_id", user.id)
       .maybeSingle();
 
-    if (platformAdmin) {
-      setMembership({ role: "super_admin", clinic_id: null });
-      setLoading(false);
-      return;
-    }
+    const isSuperAdmin = Boolean(platformAdmin);
 
     let { data: membershipRows, error: membershipQueryError } = await supabase
       .from("user_clinic_memberships")
@@ -311,11 +330,8 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
       console.warn("membership query", membershipQueryError.message);
     }
 
-    let membershipData = ((membershipRows as Array<{ clinic_id: string; role: string }> | null) ?? [])[0] ?? null;
-    const petOwnerMembership = ((membershipRows as Array<{ clinic_id: string; role: string }> | null) ?? []).find(
-      (m) => m.role === "pet_owner",
-    );
-    if (petOwnerMembership) membershipData = petOwnerMembership;
+    const membershipRowList = (membershipRows as Array<{ clinic_id: string; role: string }> | null) ?? [];
+    let membershipData = pickActiveMembership(membershipRowList);
 
     if (!membershipData) {
       const pending = await loadPendingInvite();
@@ -334,9 +350,7 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
             .eq("user_id", user.id)
             .eq("is_active", true)
             .order("updated_at", { ascending: false });
-          membershipData = ((retry.data as Array<{ clinic_id: string; role: string }> | null) ?? []).find(
-            (m) => m.role === "pet_owner",
-          ) ?? ((retry.data as Array<{ clinic_id: string; role: string }> | null) ?? [])[0] ?? null;
+          membershipData = pickActiveMembership((retry.data as Array<{ clinic_id: string; role: string }> | null) ?? []);
         }
       }
     }
@@ -350,12 +364,24 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
           .eq("user_id", user.id)
           .eq("is_active", true)
           .order("updated_at", { ascending: false });
-        membershipData =
-          ((retry.data as Array<{ clinic_id: string; role: string }> | null) ?? []).find((m) => m.role === "pet_owner") ??
-          ((retry.data as Array<{ clinic_id: string; role: string }> | null) ?? [])[0] ??
-          null;
+        membershipData = pickActiveMembership((retry.data as Array<{ clinic_id: string; role: string }> | null) ?? []);
       } catch (ensureErr) {
         console.warn("syncWebsiteAccountForMobile", ensureErr instanceof Error ? ensureErr.message : ensureErr);
+      }
+    }
+
+    if (!membershipData) {
+      try {
+        await forceAssignOnlyClinic("pet_owner");
+        const retry = await supabase
+          .from("user_clinic_memberships")
+          .select("clinic_id, role")
+          .eq("user_id", user.id)
+          .eq("is_active", true)
+          .order("updated_at", { ascending: false });
+        membershipData = pickActiveMembership((retry.data as Array<{ clinic_id: string; role: string }> | null) ?? []);
+      } catch (forceErr) {
+        console.warn("forceAssignOnlyClinic", forceErr instanceof Error ? forceErr.message : forceErr);
       }
     }
 
@@ -363,6 +389,25 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
       setLoading(false);
       return;
     }
+
+    if (membershipData.role === "marketing_editor") {
+      setMembership(membershipData);
+      setLoading(false);
+      return;
+    }
+
+    if (isSuperAdmin) {
+      let clinicId: string | null = membershipData.clinic_id;
+      if (!clinicId) {
+        clinicId = await resolveSuperAdminClinicId();
+      }
+      if (!clinicId) {
+        setLoading(false);
+        return;
+      }
+      membershipData = { role: "super_admin", clinic_id: clinicId };
+    }
+
     setMembership(membershipData);
     const { data: branchData } = await supabase.rpc("get_public_branches_for_clinic", {
       p_clinic_id: membershipData.clinic_id,
@@ -658,13 +703,182 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
       } else {
         setOwnerTimeChangeRequests([]);
       }
-    } else if (role === "doctor") {
+    } else if (isSeniorDoctorRole(role)) {
       const { data: doctor } = await supabase
         .from("staff_profiles")
         .select("id")
         .eq("clinic_id", membershipData.clinic_id)
         .eq("user_id", user.id)
-        .eq("role", "doctor")
+        .eq("role", "senior_doctor")
+        .eq("is_active", true)
+        .limit(1)
+        .maybeSingle();
+      setDoctorStaffId(doctor?.id ?? null);
+
+      const { data: doctorList } = await supabase
+        .from("staff_profiles")
+        .select("id, full_name")
+        .eq("clinic_id", membershipData.clinic_id)
+        .in("role", ["doctor", "senior_doctor"])
+        .eq("is_active", true)
+        .order("full_name", { ascending: true });
+      setDoctors((doctorList as StaffDoctorOption[]) ?? []);
+
+      const today = new Date().toISOString().slice(0, 10);
+      const cid = membershipData.clinic_id;
+      const [{ data: appointmentsData }, { data: rxClinic }, { data: pendingAtcr }, { data: notifData }, { data: medsData }] =
+        await Promise.all([
+          supabase
+            .from("appointments")
+            .select(appointmentSelect)
+            .eq("clinic_id", cid)
+            .gte("starts_at", `${today}T00:00:00`)
+            .lt("starts_at", `${today}T23:59:59`)
+            .order("starts_at", { ascending: true })
+            .limit(120),
+          supabase
+            .from("prescriptions")
+            .select("id, issued_at, notes, pdf_url, pets(name)")
+            .eq("clinic_id", cid)
+            .order("issued_at", { ascending: false })
+            .limit(25),
+          supabase
+            .from("appointment_time_change_requests")
+            .select("id, appointment_id, requested_starts_at, appointments(starts_at, pets(name))")
+            .eq("clinic_id", cid)
+            .eq("status", "pending")
+            .order("created_at", { ascending: false })
+            .limit(30),
+          supabase
+            .from("notifications")
+            .select("id, title, message, created_at, read_at")
+            .eq("clinic_id", cid)
+            .eq("user_id", user.id)
+            .order("created_at", { ascending: false })
+            .limit(20),
+          supabase
+            .from("inventory_items")
+            .select("name")
+            .eq("clinic_id", cid)
+            .eq("is_active", true)
+            .order("name", { ascending: true })
+            .limit(200),
+        ]);
+      setOwnerTimeChangeRequests([]);
+      setAppointments(((appointmentsData as unknown[]) ?? []).map(normalizeAppointment));
+      const rawRx = (rxClinic ?? []) as Array<{
+        id: string;
+        issued_at: string;
+        notes: string | null;
+        pdf_url: string | null;
+        pets?: { name?: string | null } | { name?: string | null }[] | null;
+      }>;
+      setClinicRecentPrescriptions(
+        rawRx.map((r) => {
+          const p = r.pets;
+          const pet = Array.isArray(p) ? p[0] : p ?? null;
+          return { id: r.id, issued_at: r.issued_at, notes: r.notes, pdf_url: r.pdf_url, pets: pet };
+        }),
+      );
+      const atcrRows = (pendingAtcr ?? []) as Array<{
+        id: string;
+        appointment_id: string;
+        requested_starts_at: string;
+        appointments?:
+          | { starts_at: string; pets?: { name?: string | null } | { name?: string | null }[] | null }
+          | { starts_at: string; pets?: { name?: string | null } | { name?: string | null }[] | null }[]
+          | null;
+      }>;
+      const pendingRows = atcrRows.map((row) => {
+        const ap = row.appointments;
+        const a = Array.isArray(ap) ? ap[0] : ap ?? null;
+        const pets = a?.pets;
+        const pet = Array.isArray(pets) ? pets[0] : pets ?? null;
+        return {
+          id: row.id,
+          appointment_id: row.appointment_id,
+          requested_starts_at: row.requested_starts_at,
+          current_starts_at: a?.starts_at ?? null,
+          pet_name: pet?.name ?? null,
+        };
+      });
+      setPendingTimeChangeRequests(pendingRows);
+      setDoctorNotifications((notifData as DoctorNotification[]) ?? []);
+      setDoctorMedicineNames(
+        Array.from(new Set(((medsData as Array<{ name: string }> | null) ?? []).map((m) => m.name).filter(Boolean))),
+      );
+
+      const dayStart = new Date();
+      dayStart.setHours(0, 0, 0, 0);
+      const dayEnd = new Date();
+      dayEnd.setHours(23, 59, 59, 999);
+      const [{ count: apptCount }, { data: invRows }] = await Promise.all([
+        supabase
+          .from("appointments")
+          .select("id", { count: "exact", head: true })
+          .eq("clinic_id", cid)
+          .gte("starts_at", dayStart.toISOString())
+          .lte("starts_at", dayEnd.toISOString()),
+        supabase
+          .from("inventory_items")
+          .select("stock_quantity, reorder_level")
+          .eq("clinic_id", cid)
+          .eq("is_active", true)
+          .limit(500),
+      ]);
+      const lowStock = (invRows ?? []).filter((r) => r.stock_quantity <= r.reorder_level).length;
+      setAdminStats({
+        appointmentsToday: apptCount ?? 0,
+        pendingTimeChanges: pendingRows.length,
+        lowStockSkus: lowStock,
+      });
+
+      const [{ data: clinicRow }, { data: visitsAdmin }] = await Promise.all([
+        supabase.from("clinics").select("website_owner_visit_reports_enabled").eq("id", cid).maybeSingle(),
+        supabase
+          .from("visits")
+          .select("id, started_at, status, visit_report_pdf_path, visit_report_pdf_generated_at, pets(name), branches(name)")
+          .eq("clinic_id", cid)
+          .order("started_at", { ascending: false })
+          .limit(150),
+      ]);
+      setClinicReportsEnabled(
+        (clinicRow as { website_owner_visit_reports_enabled?: boolean | null } | null)?.website_owner_visit_reports_enabled ??
+          true,
+      );
+      const visitRows = (visitsAdmin ?? []) as Array<{
+        id: string;
+        started_at: string | null;
+        status: string | null;
+        visit_report_pdf_path: string | null;
+        visit_report_pdf_generated_at: string | null;
+        pets?: { name?: string | null } | { name?: string | null }[] | null;
+        branches?: { name?: string | null } | { name?: string | null }[] | null;
+      }>;
+      setAdminVisitSummaries(
+        visitRows.map((v) => {
+          const pet = Array.isArray(v.pets) ? v.pets[0] : v.pets ?? null;
+          const branch = Array.isArray(v.branches) ? v.branches[0] : v.branches ?? null;
+          const hasPath = Boolean(v.visit_report_pdf_path?.trim());
+          const hasGenerated = Boolean(v.visit_report_pdf_generated_at);
+          return {
+            id: v.id,
+            pet_name: pet?.name?.trim() || "Pet",
+            branch_name: branch?.name?.trim() || "Clinic",
+            visited_at: v.started_at,
+            status_label: v.status?.replace(/_/g, " ") ?? null,
+            report_ready: hasPath && hasGenerated,
+            visit_report_pdf_generated_at: v.visit_report_pdf_generated_at,
+          };
+        }),
+      );
+    } else if (isRegularDoctorRole(role)) {
+      const { data: doctor } = await supabase
+        .from("staff_profiles")
+        .select("id")
+        .eq("clinic_id", membershipData.clinic_id)
+        .eq("user_id", user.id)
+        .in("role", ["doctor", "senior_doctor"])
         .eq("is_active", true)
         .limit(1)
         .maybeSingle();
@@ -712,13 +926,13 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
         .from("staff_profiles")
         .select("id, full_name")
         .eq("clinic_id", membershipData.clinic_id)
-        .eq("role", "doctor")
+        .in("role", ["doctor", "senior_doctor"])
         .eq("is_active", true)
         .order("full_name", { ascending: true });
       setDoctors((doctorList as StaffDoctorOption[]) ?? []);
 
       const today = new Date().toISOString().slice(0, 10);
-      const [{ data: appointmentsData }, { data: ordersClinic }, { data: rxClinic }, { data: pendingAtcr }] = await Promise.all([
+      const [{ data: appointmentsData }, { data: rxClinic }, { data: pendingAtcr }] = await Promise.all([
         supabase
           .from("appointments")
           .select(appointmentSelect)
@@ -727,12 +941,6 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
           .lt("starts_at", `${today}T23:59:59`)
           .order("starts_at", { ascending: true })
           .limit(120),
-        supabase
-          .from("orders")
-          .select("id, status, grand_total, placed_at")
-          .eq("clinic_id", membershipData.clinic_id)
-          .order("placed_at", { ascending: false })
-          .limit(25),
         supabase
           .from("prescriptions")
           .select("id, issued_at, notes, pdf_url, pets(name)")
@@ -749,7 +957,6 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
       ]);
       setOwnerTimeChangeRequests([]);
       setAppointments(((appointmentsData as unknown[]) ?? []).map(normalizeAppointment));
-      setClinicRecentOrders((ordersClinic as typeof clinicRecentOrders) ?? []);
       const rawRx = (rxClinic ?? []) as Array<{
         id: string;
         issued_at: string;
@@ -790,7 +997,7 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
         }),
       );
 
-      if (role === "clinic_admin" || role === "branch_admin") {
+      if (role === "clinic_admin" || role === "branch_admin" || role === "super_admin") {
         const cid = membershipData.clinic_id;
         const { data: staffRows } = await supabase
           .from("staff_profiles")
@@ -799,7 +1006,7 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
           .eq("user_id", user.id)
           .eq("is_active", true);
         const preferredStaff =
-          (staffRows ?? []).find((r: { role: string }) => r.role === "doctor") ?? (staffRows ?? [])[0];
+          (staffRows ?? []).find((r: { role: string }) => isDoctorRole(r.role)) ?? (staffRows ?? [])[0];
         setDoctorStaffId(preferredStaff?.id ?? null);
 
         const [{ data: notifAdmin }, { data: medsAdmin }] = await Promise.all([
@@ -827,7 +1034,7 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
         dayStart.setHours(0, 0, 0, 0);
         const dayEnd = new Date();
         dayEnd.setHours(23, 59, 59, 999);
-        const [{ count: apptCount }, { data: ordersToday }, { data: invRows }] = await Promise.all([
+        const [{ count: apptCount }, { data: invRows }] = await Promise.all([
           supabase
             .from("appointments")
             .select("id", { count: "exact", head: true })
@@ -835,26 +1042,62 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
             .gte("starts_at", dayStart.toISOString())
             .lte("starts_at", dayEnd.toISOString()),
           supabase
-            .from("orders")
-            .select("grand_total, status")
-            .eq("clinic_id", cid)
-            .gte("placed_at", dayStart.toISOString())
-            .lte("placed_at", dayEnd.toISOString())
-            .in("status", ["paid", "processing", "shipped", "delivered"]),
-          supabase
             .from("inventory_items")
             .select("stock_quantity, reorder_level")
             .eq("clinic_id", cid)
             .eq("is_active", true)
             .limit(500),
         ]);
-        const revenue = (ordersToday ?? []).reduce((sum, row) => sum + Number(row.grand_total ?? 0), 0);
         const lowStock = (invRows ?? []).filter((r) => r.stock_quantity <= r.reorder_level).length;
         setAdminStats({
           appointmentsToday: apptCount ?? 0,
-          ordersRevenueToday: revenue,
+          pendingTimeChanges: (pendingAtcr ?? []).length,
           lowStockSkus: lowStock,
         });
+
+        const [{ data: clinicRow }, { data: visitsAdmin }] = await Promise.all([
+          supabase
+            .from("clinics")
+            .select("website_owner_visit_reports_enabled")
+            .eq("id", cid)
+            .maybeSingle(),
+          supabase
+            .from("visits")
+            .select("id, started_at, status, visit_report_pdf_path, visit_report_pdf_generated_at, pets(name), branches(name)")
+            .eq("clinic_id", cid)
+            .order("started_at", { ascending: false })
+            .limit(150),
+        ]);
+        setClinicReportsEnabled(
+          (clinicRow as { website_owner_visit_reports_enabled?: boolean | null } | null)?.website_owner_visit_reports_enabled ??
+            true,
+        );
+        const visitRows = (visitsAdmin ?? []) as Array<{
+          id: string;
+          started_at: string | null;
+          status: string | null;
+          visit_report_pdf_path: string | null;
+          visit_report_pdf_generated_at: string | null;
+          pets?: { name?: string | null } | { name?: string | null }[] | null;
+          branches?: { name?: string | null } | { name?: string | null }[] | null;
+        }>;
+        setAdminVisitSummaries(
+          visitRows.map((v) => {
+            const pet = Array.isArray(v.pets) ? v.pets[0] : v.pets ?? null;
+            const branch = Array.isArray(v.branches) ? v.branches[0] : v.branches ?? null;
+            const hasPath = Boolean(v.visit_report_pdf_path?.trim());
+            const hasGenerated = Boolean(v.visit_report_pdf_generated_at);
+            return {
+              id: v.id,
+              pet_name: pet?.name?.trim() || "Pet",
+              branch_name: branch?.name?.trim() || "Clinic",
+              visited_at: v.started_at,
+              status_label: v.status?.replace(/_/g, " ") ?? null,
+              report_ready: hasPath && hasGenerated,
+              visit_report_pdf_generated_at: v.visit_report_pdf_generated_at,
+            };
+          }),
+        );
       }
     }
 
@@ -892,7 +1135,7 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
   useEffect(() => {
     if (loading || !membership?.clinic_id) return;
     const rl = membership.role?.toLowerCase();
-    if (rl === "pet_owner" || rl === "super_admin") return;
+    if (rl === "pet_owner") return;
     let cancelled = false;
     void (async () => {
       const {
@@ -956,7 +1199,7 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
     if (!appointment) return null;
 
     const assignedDoctorId =
-      appointment.doctor_id ?? (membership.role === "doctor" ? doctorStaffId : null);
+      appointment.doctor_id ?? (isDoctorRole(membership.role) ? doctorStaffId : null);
 
     if (checkIn && assignedDoctorId && !appointment.doctor_id) {
       await supabase
@@ -1381,6 +1624,22 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
     }
   }
 
+  async function onDownloadAllAdminReports() {
+    const ready = adminVisitSummaries.filter((v) => v.report_ready);
+    if (!ready.length) {
+      Alert.alert("No reports", "There are no visit report PDFs ready to download yet.");
+      return;
+    }
+    setDownloadingAdminReports(true);
+    try {
+      for (const row of ready) {
+        await onOpenVisitReport(row.id);
+      }
+    } finally {
+      setDownloadingAdminReports(false);
+    }
+  }
+
   async function onOpenLatestPrescriptionForAppointment(appointmentId: string) {
     if (!membership?.clinic_id) return;
     const { data: visit } = await supabase
@@ -1755,45 +2014,16 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
         ) : null}
       </View>
 
-      <Modal
+      <ProfileMenuSheet
         visible={profileOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setProfileOpen(false)}
-      >
-        <View style={styles.profileModalRoot}>
-          <Pressable style={styles.profileModalBackdrop} onPress={() => setProfileOpen(false)} />
-          <View style={[styles.profileMenu, { top: insets.top + 48 }]}>
-            <LinearGradient colors={[theme.primary, theme.gradientEnd]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.profileMenuAccent} />
-            <View style={styles.profileBrandRow}>
-              {platformBranding?.logo_url ? (
-                <Image source={{ uri: platformBranding.logo_url }} style={styles.profileMenuLogo} resizeMode="contain" />
-              ) : null}
-              <Text style={styles.profileBrand}>{platformBranding?.product_name ?? "GreenCoatVets"}</Text>
-            </View>
-            <Text style={styles.profileRoleLabel}>Signed in as</Text>
-            <Text style={styles.profileRole}>
-              {(membership?.role ?? "guest").replace(/_/g, " ")}
-            </Text>
-            <Text style={styles.profileMeta} numberOfLines={1}>
-              {membership?.clinic_id ? `Clinic ${membership.clinic_id.slice(0, 8)}…` : "Platform / no clinic"}
-            </Text>
-            <Pressable
-              style={styles.profileSignOut}
-              onPress={() => {
-                setProfileOpen(false);
-                onSignOut();
-              }}
-            >
-              <MaterialIcons name="logout" size={20} color={theme.onPrimary} />
-              <Text style={styles.profileSignOutText}>Sign out</Text>
-            </Pressable>
-            <Pressable style={styles.profileClose} onPress={() => setProfileOpen(false)}>
-              <Text style={styles.profileCloseText}>Close</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
+        topInset={insets.top}
+        branding={platformBranding}
+        roleLabel={membership?.role ?? "guest"}
+        clinicMeta={membership?.clinic_id ? `Clinic ${membership.clinic_id.slice(0, 8)}…` : "Platform"}
+        userEmail={userEmail}
+        onClose={() => setProfileOpen(false)}
+        onSignOut={onSignOut}
+      />
 
       <Modal visible={announcementPopup != null} transparent animationType="fade" onRequestClose={dismissAnnouncementPopup}>
         <View style={styles.announcementModalRoot}>
@@ -1820,12 +2050,16 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
         <View style={styles.center}>
           <PawCircularLoader size={88} message="Loading your workspace…" />
         </View>
+      ) : membership?.role === "marketing_editor" ? (
+        <View style={styles.center}>
+          <WebOnlyMarketingEditorScreen onSignOut={onSignOut} />
+        </View>
       ) : !membership ? (
         <View style={styles.center}>
           <Text style={styles.noAccessTitle}>No clinic access</Text>
           <Text style={styles.noAccessBody}>
-            We could not link your account to the clinic yet. Pull down to refresh, or sign out and sign in again after
-            your clinic admin confirms registration.
+            We could not link your account to the clinic yet. Tap try again — we will assign the clinic automatically when
+            only one is configured.
           </Text>
           <Pressable style={styles.retryBtn} onPress={() => void refreshData()}>
             <Text style={styles.retryBtnText}>Try again</Text>
@@ -1863,16 +2097,7 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
               tabBarIconStyle: { marginBottom: 0 },
             }}
           >
-            {role === "super_admin" ? (
-              <Tab.Screen
-                name="Web"
-                options={{
-                  tabBarIcon: ({ color, size }) => <MaterialIcons name="language" size={size} color={color} />,
-                }}
-              >
-                {() => <WebOnlySuperAdminScreen onSignOut={onSignOut} />}
-              </Tab.Screen>
-            ) : role === "pet_owner" ? (
+            {role === "pet_owner" ? (
               <>
                 <Tab.Screen
                   name="Home"
@@ -1985,21 +2210,6 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
                   )}
                 </Tab.Screen>
                 <Tab.Screen
-                  name="Shop"
-                  options={{
-                    tabBarIcon: ({ color, size }) => <MaterialIcons name="shopping-bag" size={size} color={color} />,
-                  }}
-                >
-                  {() => (
-                    <OwnerShopScreen
-                      orders={orders}
-                      products={products}
-                      refreshing={refreshing}
-                      onRefresh={refreshData}
-                    />
-                  )}
-                </Tab.Screen>
-                <Tab.Screen
                   name="Inbox"
                   options={{
                     tabBarIcon: ({ color, size }) => <MaterialIcons name="inbox" size={size} color={color} />,
@@ -2015,7 +2225,7 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
                   )}
                 </Tab.Screen>
               </>
-            ) : role === "doctor" ? (
+            ) : isRegularDoctorRole(role) ? (
               <>
                 <Tab.Screen
                   name="Appointments"
@@ -2047,6 +2257,25 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
                   }
                 </Tab.Screen>
                 <Tab.Screen
+                  name="Calendar"
+                  options={{
+                    tabBarIcon: ({ color, size }) => <MaterialIcons name="calendar-month" size={size} color={color} />,
+                  }}
+                >
+                  {() =>
+                    membership.clinic_id ? (
+                      <StaffAppointmentsCalendarScreen
+                        clinicId={membership.clinic_id}
+                        doctorStaffId={doctorStaffId}
+                        onStatusChange={onStatusChange}
+                        onUploadDocument={onUploadDocument}
+                        refreshing={refreshing}
+                        onRefresh={refreshData}
+                      />
+                    ) : null
+                  }
+                </Tab.Screen>
+                <Tab.Screen
                   name="Walk-in"
                   options={{
                     tabBarIcon: ({ color, size }) => <MaterialIcons name="person-add-alt-1" size={size} color={color} />,
@@ -2069,13 +2298,18 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
                 >
                   {() =>
                     membership?.clinic_id ? (
-                      <StaffProfileScreen clinicId={membership.clinic_id} staffRole="doctor" onSaved={refreshData} />
+                      <StaffProfileScreen
+                        clinicId={membership.clinic_id}
+                        staffRole={role === "senior_doctor" ? "senior_doctor" : "doctor"}
+                        onSaved={refreshData}
+                      />
                     ) : null
                   }
                 </Tab.Screen>
                 <Tab.Screen
                   name="Invites"
                   options={{
+                    tabBarLabel: "Walk-in QR",
                     tabBarIcon: ({ color, size }) => <MaterialIcons name="qr-code-2" size={size} color={color} />,
                   }}
                 >
@@ -2086,32 +2320,76 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
                   }
                 </Tab.Screen>
               </>
-            ) : role === "clinic_admin" || role === "branch_admin" ? (
+            ) : isSeniorDoctorRole(role) ? (
               <>
                 <Tab.Screen
-                  name={role === "clinic_admin" ? "Clinic" : "Branch"}
+                  name="Video"
                   options={{
-                    tabBarIcon: ({ color, size }) => <MaterialIcons name="business" size={size} color={color} />,
+                    tabBarIcon: ({ color, size }) => <MaterialIcons name="videocam" size={size} color={color} />,
                   }}
                 >
-                  {() => (
-                    <AdminMobileStatsScreen
-                      title={role === "clinic_admin" ? "Clinic administration" : "Branch administration"}
-                      subtitle={role === "clinic_admin" ? "Clinic admin · mobile" : "Branch admin · mobile"}
-                      stats={adminStats}
-                      refreshing={refreshing}
-                      onRefresh={refreshData}
-                    />
-                  )}
+                  {() =>
+                    membership?.clinic_id ? (
+                      <SeniorVideoCallsScreen clinicId={membership.clinic_id} refreshing={refreshing} onRefresh={refreshData} />
+                    ) : null
+                  }
                 </Tab.Screen>
                 <Tab.Screen
-                  name="Front desk"
+                  name="Consult"
+                  options={{
+                    tabBarIcon: ({ color, size }) => <MaterialIcons name="medical-services" size={size} color={color} />,
+                  }}
+                >
+                  {() =>
+                    membership.clinic_id ? (
+                      <DoctorNavigator
+                        appointments={appointments}
+                        clinicId={membership.clinic_id}
+                        doctorStaffId={doctorStaffId}
+                        queueDate={doctorQueueDate}
+                        onQueueDateChange={(date) => {
+                          setDoctorQueueDate(date);
+                          void loadData(date);
+                        }}
+                        ensureVisitForAppointment={ensureVisitForAppointment}
+                        onUploadVisitImage={onUploadVisitImage}
+                        onUploadDocument={onUploadDocument}
+                        onStatusChange={onStatusChange}
+                        notifications={doctorNotifications}
+                        medicineNames={doctorMedicineNames}
+                        refreshing={refreshing}
+                        onRefresh={refreshData}
+                      />
+                    ) : null
+                  }
+                </Tab.Screen>
+                <Tab.Screen
+                  name="Calendar"
+                  options={{
+                    tabBarIcon: ({ color, size }) => <MaterialIcons name="calendar-month" size={size} color={color} />,
+                  }}
+                >
+                  {() =>
+                    membership?.clinic_id ? (
+                      <StaffAppointmentsCalendarScreen
+                        clinicId={membership.clinic_id}
+                        doctorStaffId={doctorStaffId}
+                        onStatusChange={onStatusChange}
+                        onUploadDocument={onUploadDocument}
+                        refreshing={refreshing}
+                        onRefresh={refreshData}
+                      />
+                    ) : null
+                  }
+                </Tab.Screen>
+                <Tab.Screen
+                  name="Reception"
                   options={{
                     tabBarIcon: ({ color, size }) => <MaterialIcons name="meeting-room" size={size} color={color} />,
                   }}
                 >
                   {() => (
-                    <ReceptionDeskScreen
+                    <ReceptionQueueScreen
                       appointments={appointments}
                       doctors={doctors}
                       branches={branches}
@@ -2120,11 +2398,218 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
                       onOpenPrescriptionForAppointment={onOpenLatestPrescriptionForAppointment}
                       onAssignDoctor={onAssignDoctor}
                       onWalkIn={onWalkIn}
-                      clinicRecentOrders={clinicRecentOrders}
-                      clinicRecentPrescriptions={clinicRecentPrescriptions}
-                      onOpenPrescriptionPdf={onOpenPrescriptionPdf}
                       pendingTimeChangeRequests={pendingTimeChangeRequests}
                       onApproveTimeChangeRequest={onApproveTimeChangeRequest}
+                      refreshing={refreshing}
+                      onRefresh={refreshData}
+                    />
+                  )}
+                </Tab.Screen>
+                <Tab.Screen
+                  name="Patients"
+                  options={{
+                    tabBarIcon: ({ color, size }) => <MaterialIcons name="groups" size={size} color={color} />,
+                  }}
+                >
+                  {() =>
+                    membership?.clinic_id ? (
+                      <AdminPatientsScreen clinicId={membership.clinic_id} refreshing={refreshing} onRefresh={refreshData} />
+                    ) : null
+                  }
+                </Tab.Screen>
+                <Tab.Screen
+                  name="Reports"
+                  options={{
+                    tabBarIcon: ({ color, size }) => <MaterialIcons name="picture-as-pdf" size={size} color={color} />,
+                  }}
+                >
+                  {() => (
+                    <OwnerReportsScreen
+                      reportsEnabled={clinicReportsEnabled}
+                      visitSummaries={adminVisitSummaries}
+                      onOpenVisitReport={onOpenVisitReport}
+                      onDownloadAll={onDownloadAllAdminReports}
+                      downloadingAll={downloadingAdminReports}
+                      refreshing={refreshing}
+                      onRefresh={refreshData}
+                    />
+                  )}
+                </Tab.Screen>
+                <Tab.Screen
+                  name="Rx"
+                  options={{
+                    tabBarIcon: ({ color, size }) => <MaterialIcons name="medication" size={size} color={color} />,
+                  }}
+                >
+                  {() => (
+                    <ClinicPrescriptionsScreen
+                      prescriptions={clinicRecentPrescriptions}
+                      onOpenPrescriptionPdf={onOpenPrescriptionPdf}
+                      refreshing={refreshing}
+                      onRefresh={refreshData}
+                    />
+                  )}
+                </Tab.Screen>
+                <Tab.Screen
+                  name="Overview"
+                  options={{
+                    tabBarIcon: ({ color, size }) => <MaterialIcons name="dashboard" size={size} color={color} />,
+                  }}
+                >
+                  {() => (
+                    <AdminMobileStatsScreen
+                      title="Senior veterinarian"
+                      subtitle="Senior doctor · clinic overview"
+                      stats={adminStats}
+                      refreshing={refreshing}
+                      onRefresh={refreshData}
+                    />
+                  )}
+                </Tab.Screen>
+                <Tab.Screen
+                  name="Profile"
+                  options={{
+                    tabBarIcon: ({ color, size }) => <MaterialIcons name="badge" size={size} color={color} />,
+                  }}
+                >
+                  {() =>
+                    membership?.clinic_id ? (
+                      <StaffProfileScreen clinicId={membership.clinic_id} staffRole="senior_doctor" onSaved={refreshData} />
+                    ) : null
+                  }
+                </Tab.Screen>
+                <Tab.Screen
+                  name="Invites"
+                  options={{
+                    tabBarLabel: "Walk-in QR",
+                    tabBarIcon: ({ color, size }) => <MaterialIcons name="qr-code-2" size={size} color={color} />,
+                  }}
+                >
+                  {() =>
+                    membership?.clinic_id ? (
+                      <InviteQrMobileScreen clinicId={membership.clinic_id} membershipRole={role} />
+                    ) : null
+                  }
+                </Tab.Screen>
+              </>
+            ) : role === "clinic_admin" || role === "branch_admin" || role === "super_admin" ? (
+              <>
+                <Tab.Screen
+                  name={role === "super_admin" ? "Platform" : role === "clinic_admin" ? "Clinic" : "Branch"}
+                  options={{
+                    tabBarIcon: ({ color, size }) => (
+                      <MaterialIcons
+                        name={role === "super_admin" ? "admin-panel-settings" : "business"}
+                        size={size}
+                        color={color}
+                      />
+                    ),
+                  }}
+                >
+                  {() => (
+                    <AdminMobileStatsScreen
+                      title={
+                        role === "super_admin"
+                          ? "Platform administration"
+                          : role === "clinic_admin"
+                            ? "Clinic administration"
+                            : "Branch administration"
+                      }
+                      subtitle={
+                        role === "super_admin"
+                          ? "Super admin · full mobile access"
+                          : role === "clinic_admin"
+                            ? "Clinic admin · mobile"
+                            : "Branch admin · mobile"
+                      }
+                      stats={adminStats}
+                      refreshing={refreshing}
+                      onRefresh={refreshData}
+                    />
+                  )}
+                </Tab.Screen>
+                <Tab.Screen
+                  name="Patients"
+                  options={{
+                    tabBarIcon: ({ color, size }) => <MaterialIcons name="groups" size={size} color={color} />,
+                  }}
+                >
+                  {() =>
+                    membership?.clinic_id ? (
+                      <AdminPatientsScreen clinicId={membership.clinic_id} refreshing={refreshing} onRefresh={refreshData} />
+                    ) : null
+                  }
+                </Tab.Screen>
+                <Tab.Screen
+                  name="Calendar"
+                  options={{
+                    tabBarIcon: ({ color, size }) => <MaterialIcons name="calendar-month" size={size} color={color} />,
+                  }}
+                >
+                  {() =>
+                    membership?.clinic_id ? (
+                      <StaffAppointmentsCalendarScreen
+                        clinicId={membership.clinic_id}
+                        doctorStaffId={doctorStaffId}
+                        onStatusChange={onStatusChange}
+                        onUploadDocument={onUploadDocument}
+                        refreshing={refreshing}
+                        onRefresh={refreshData}
+                      />
+                    ) : null
+                  }
+                </Tab.Screen>
+                <Tab.Screen
+                  name="Reports"
+                  options={{
+                    tabBarIcon: ({ color, size }) => <MaterialIcons name="picture-as-pdf" size={size} color={color} />,
+                  }}
+                >
+                  {() => (
+                    <OwnerReportsScreen
+                      reportsEnabled={clinicReportsEnabled}
+                      visitSummaries={adminVisitSummaries}
+                      onOpenVisitReport={onOpenVisitReport}
+                      onDownloadAll={onDownloadAllAdminReports}
+                      downloadingAll={downloadingAdminReports}
+                      refreshing={refreshing}
+                      onRefresh={refreshData}
+                    />
+                  )}
+                </Tab.Screen>
+                <Tab.Screen
+                  name="Reception"
+                  options={{
+                    tabBarIcon: ({ color, size }) => <MaterialIcons name="meeting-room" size={size} color={color} />,
+                  }}
+                >
+                  {() => (
+                    <ReceptionQueueScreen
+                      appointments={appointments}
+                      doctors={doctors}
+                      branches={branches}
+                      onStatusChange={onStatusChange}
+                      onUploadDocument={onUploadDocument}
+                      onOpenPrescriptionForAppointment={onOpenLatestPrescriptionForAppointment}
+                      onAssignDoctor={onAssignDoctor}
+                      onWalkIn={onWalkIn}
+                      pendingTimeChangeRequests={pendingTimeChangeRequests}
+                      onApproveTimeChangeRequest={onApproveTimeChangeRequest}
+                      refreshing={refreshing}
+                      onRefresh={refreshData}
+                    />
+                  )}
+                </Tab.Screen>
+                <Tab.Screen
+                  name="Rx"
+                  options={{
+                    tabBarIcon: ({ color, size }) => <MaterialIcons name="medication" size={size} color={color} />,
+                  }}
+                >
+                  {() => (
+                    <ClinicPrescriptionsScreen
+                      prescriptions={clinicRecentPrescriptions}
+                      onOpenPrescriptionPdf={onOpenPrescriptionPdf}
                       refreshing={refreshing}
                       onRefresh={refreshData}
                     />
@@ -2162,6 +2647,7 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
                 <Tab.Screen
                   name="Invites"
                   options={{
+                    tabBarLabel: "Walk-in QR",
                     tabBarIcon: ({ color, size }) => <MaterialIcons name="qr-code-2" size={size} color={color} />,
                   }}
                 >
@@ -2239,7 +2725,7 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
                   }}
                 >
                   {() => (
-                    <ReceptionDeskScreen
+                    <ReceptionQueueScreen
                       appointments={appointments}
                       doctors={doctors}
                       branches={branches}
@@ -2248,9 +2734,6 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
                       onOpenPrescriptionForAppointment={onOpenLatestPrescriptionForAppointment}
                       onAssignDoctor={onAssignDoctor}
                       onWalkIn={onWalkIn}
-                      clinicRecentOrders={clinicRecentOrders}
-                      clinicRecentPrescriptions={clinicRecentPrescriptions}
-                      onOpenPrescriptionPdf={onOpenPrescriptionPdf}
                       pendingTimeChangeRequests={pendingTimeChangeRequests}
                       onApproveTimeChangeRequest={onApproveTimeChangeRequest}
                       refreshing={refreshing}
@@ -2261,6 +2744,7 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
                 <Tab.Screen
                   name="Invites"
                   options={{
+                    tabBarLabel: "Walk-in QR",
                     tabBarIcon: ({ color, size }) => <MaterialIcons name="qr-code-2" size={size} color={color} />,
                   }}
                 >
@@ -2279,7 +2763,7 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
                 }}
               >
                 {() => (
-                  <ReceptionDeskScreen
+                  <ReceptionQueueScreen
                     appointments={appointments}
                     doctors={doctors}
                     branches={branches}
@@ -2288,9 +2772,6 @@ function MobileHome({ onSignOut }: { onSignOut: () => void }) {
                     onOpenPrescriptionForAppointment={onOpenLatestPrescriptionForAppointment}
                     onAssignDoctor={onAssignDoctor}
                     onWalkIn={onWalkIn}
-                    clinicRecentOrders={clinicRecentOrders}
-                    clinicRecentPrescriptions={clinicRecentPrescriptions}
-                    onOpenPrescriptionPdf={onOpenPrescriptionPdf}
                     pendingTimeChangeRequests={pendingTimeChangeRequests}
                     onApproveTimeChangeRequest={onApproveTimeChangeRequest}
                     refreshing={refreshing}

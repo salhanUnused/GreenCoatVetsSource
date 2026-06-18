@@ -19,6 +19,7 @@ import {
 } from "../../lib/petDemographics";
 import { Pet, VisitSummary } from "../../types/app";
 import { PetAvatar } from "../../components/PetAvatar";
+import { OwnerNeonCard } from "../../components/OwnerNeonCard";
 
 export function OwnerPetsScreen({
   pets,
@@ -98,7 +99,7 @@ export function OwnerPetsScreen({
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} colors={[theme.primary]} />
       }
     >
-      <View style={commonStyles.card}>
+      <OwnerNeonCard>
         <Text style={commonStyles.cardTitle}>Pet profiles</Text>
         <Text style={[commonStyles.muted, { marginBottom: 12 }]}>Medical history timeline, vaccines, and prescriptions are linked per pet.</Text>
         {pets.map((pet) => {
@@ -210,9 +211,9 @@ export function OwnerPetsScreen({
           );
         })}
         {!pets.length ? <Text style={commonStyles.emptyState}>No pets yet — add your first pet below.</Text> : null}
-      </View>
+      </OwnerNeonCard>
 
-      <View style={commonStyles.card}>
+      <OwnerNeonCard>
         <Pressable style={styles.addHeader} onPress={() => setAdding((a) => !a)}>
           <Text style={commonStyles.cardTitle}>Add pet</Text>
           <MaterialIcons name={adding ? "expand-less" : "add-circle-outline"} size={26} color={theme.primary} />
@@ -291,7 +292,7 @@ export function OwnerPetsScreen({
         ) : (
           <Text style={commonStyles.muted}>Tap to register a new pet at this clinic.</Text>
         )}
-      </View>
+      </OwnerNeonCard>
     </ScrollView>
   );
 }

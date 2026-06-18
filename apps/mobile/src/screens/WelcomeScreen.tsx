@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { Image, Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { MaterialIcons } from "@expo/vector-icons";
 import { AppAmbientBackground } from "../components/AppAmbientBackground";
-import { loadPlatformBranding, type PlatformBranding } from "../lib/platform-branding";
+import { loadAppBranding, type AppBranding } from "../lib/app-branding";
 import { theme } from "../theme/theme";
 
 export function WelcomeScreen({
@@ -15,12 +15,12 @@ export function WelcomeScreen({
   onAcceptConsent: () => Promise<void> | void;
   onContinue: () => void;
 }) {
-  const [branding, setBranding] = useState<PlatformBranding | null>(null);
+  const [branding, setBranding] = useState<AppBranding | null>(null);
   const [showConsent, setShowConsent] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    loadPlatformBranding().then((b) => {
+    loadAppBranding().then((b) => {
       if (!cancelled) setBranding(b);
     });
     return () => {
@@ -33,6 +33,11 @@ export function WelcomeScreen({
       <AppAmbientBackground />
       <View style={styles.content}>
         <Text style={styles.kicker}>WELCOME</Text>
+        {branding?.logo_url ? (
+          <Image source={{ uri: branding.logo_url }} style={styles.logo} resizeMode="contain" />
+        ) : (
+          <MaterialIcons name="pets" size={48} color={theme.primary} style={{ marginBottom: 8 }} />
+        )}
         <Text style={styles.title}>{branding?.product_name ?? "GreenCoatVets"}</Text>
         <Text style={styles.subtitle}>Book visits, track care history, and stay connected with your clinic.</Text>
 
@@ -90,7 +95,8 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "transparent" },
   content: { flex: 1, justifyContent: "center", paddingHorizontal: 24 },
   kicker: { fontSize: 11, fontWeight: "800", letterSpacing: 1.5, color: theme.onSurfaceVariant },
-  title: { marginTop: 8, fontSize: 34, fontWeight: "900", color: theme.primary, letterSpacing: -0.6 },
+  logo: { width: 72, height: 72, marginTop: 12, marginBottom: 4, alignSelf: "center" },
+  title: { marginTop: 8, fontSize: 34, fontWeight: "900", color: theme.primary, letterSpacing: -0.6, textAlign: "center" },
   subtitle: { marginTop: 10, fontSize: 16, lineHeight: 24, color: theme.onSurfaceVariant, maxWidth: 340 },
   ctaWrap: { marginTop: 28, borderRadius: 8, overflow: "hidden" },
   cta: {

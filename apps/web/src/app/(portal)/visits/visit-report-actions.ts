@@ -299,7 +299,7 @@ export async function shareVisitReportPdfByEmailAction(formData: FormData): Prom
 
     const { data: visit, error: visitError } = await supabase
       .from("visits")
-      .select("id, clinic_id, visit_report_pdf_path, pets(name), owners(full_name, email), appointments(owner_intake)")
+      .select("id, clinic_id, branch_id, owner_id, visit_report_pdf_path, pets(name), owners(full_name, email), appointments(owner_intake)")
       .eq("id", visitId)
       .maybeSingle();
     if (visitError || !visit) {
@@ -348,7 +348,10 @@ export async function shareVisitReportPdfByEmailAction(formData: FormData): Prom
       brandName,
       heading: `Visit report for ${petName}`,
       intro: `Hi ${ownerName}, your saved visit report PDF for ${petName} is attached.`,
-      body: ["Keep this report for your records and contact the clinic if you need any clarification on the visit summary."],
+      body: [
+        "Keep this report for your records and contact the clinic if you need any clarification on the visit summary.",
+        "You can also open the GreenCoatVets mobile app → Reports to download this PDF anytime.",
+      ],
       footer: `${brandName} visit reports`,
     });
 
@@ -366,6 +369,30 @@ export async function shareVisitReportPdfByEmailAction(formData: FormData): Prom
         },
       ],
     });
+
+    const ownerId = (visit as { owner_id?: string | null }).owner_id;
+    const clinicId = String((visit as { clinic_id?: string }).clinic_id ?? "");
+    const branchId = ((visit as { branch_id?: string | null }).branch_id as string | null) ?? null;
+    if (ownerId && clinicId) {
+      const { error: notifError } = await supabase.from("notifications").insert({
+        clinic_id: clinicId,
+        branch_id: branchId,
+        owner_id: ownerId,
+        channel: "push",
+        title: `Visit report shared for ${petName}`,
+        message: `Your clinic emailed the visit report PDF for ${petName} to ${recipient}. Open Reports in the app to download it anytime.`,
+        payload: {
+          kind: "visit_report_shared",
+          visit_id: visitId,
+          pet_name: petName,
+          emailed_to: recipient,
+        },
+        sent_at: new Date().toISOString(),
+      });
+      if (notifError) {
+        console.error("[shareVisitReportPdf] owner notification failed", notifError.message);
+      }
+    }
 
     revalidatePath(`/visits/${visitId}`);
     return { ok: true, sentTo: recipient };

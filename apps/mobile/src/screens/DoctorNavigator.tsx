@@ -11,8 +11,11 @@ export function DoctorNavigator({
   appointments,
   clinicId,
   doctorStaffId,
+  queueDate,
+  onQueueDateChange,
   ensureVisitForAppointment,
   onUploadVisitImage,
+  onUploadDocument,
   onStatusChange,
   notifications,
   medicineNames,
@@ -22,8 +25,11 @@ export function DoctorNavigator({
   appointments: Appointment[];
   clinicId: string;
   doctorStaffId: string | null;
-  ensureVisitForAppointment: (appointmentId: string, complete?: boolean) => Promise<string | null>;
+  queueDate: Date;
+  onQueueDateChange: (date: Date) => void;
+  ensureVisitForAppointment: (appointmentId: string, complete?: boolean, checkIn?: boolean) => Promise<string | null>;
   onUploadVisitImage: (appointmentId: string, uri: string, mimeType?: string, base64?: string | null) => Promise<void>;
+  onUploadDocument: (appointmentId: string) => Promise<void>;
   onStatusChange: (appointmentId: string, status: string) => Promise<void>;
   notifications: DoctorNotification[];
   medicineNames: string[];
@@ -40,11 +46,14 @@ export function DoctorNavigator({
         contentStyle: { backgroundColor: "transparent" },
       }}
     >
-      <Stack.Screen name="Queue" options={{ title: "Today's queue" }}>
+      <Stack.Screen name="Queue" options={{ title: "Appointments" }}>
         {() => (
           <DoctorQueueScreen
             appointments={appointments}
+            queueDate={queueDate}
+            onQueueDateChange={onQueueDateChange}
             onStatusChange={onStatusChange}
+            onUploadDocument={onUploadDocument}
             notifications={notifications}
             refreshing={refreshing}
             onRefresh={onRefresh}
@@ -58,6 +67,7 @@ export function DoctorNavigator({
             doctorStaffId={doctorStaffId}
             ensureVisitForAppointment={ensureVisitForAppointment}
             onUploadVisitImage={onUploadVisitImage}
+            onUploadDocument={onUploadDocument}
             onStatusChange={onStatusChange}
             medicineNames={medicineNames}
             onRefresh={onRefresh}

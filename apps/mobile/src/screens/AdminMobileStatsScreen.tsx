@@ -30,7 +30,7 @@ export function AdminMobileStatsScreen({
         <Text style={[commonStyles.muted, { marginBottom: 16 }]}>{subtitle}</Text>
         <View style={styles.grid}>
           <StatTile icon="event" label="Appointments today" value={stats ? String(stats.appointmentsToday) : "—"} hint="Across clinic" />
-          <StatTile icon="payments" label="Order revenue (today)" value={stats ? `₹${stats.ordersRevenueToday.toFixed(0)}` : "—"} hint="Paid orders sum" />
+          <StatTile icon="schedule" label="Time change requests" value={stats ? String(stats.pendingTimeChanges) : "—"} hint="Awaiting approval" />
           <StatTile icon="inventory" label="Low stock SKUs" value={stats ? String(stats.lowStockSkus) : "—"} hint="Below reorder level" />
         </View>
       </View>
@@ -42,8 +42,10 @@ export function AdminMobileStatsScreen({
       </View>
 
       <View style={styles.footerNote}>
-        <MaterialIcons name="laptop" size={18} color={theme.outline} />
-        <Text style={styles.footerText}>Deep configuration, staff management, and analytics remain on the web dashboard.</Text>
+        <MaterialIcons name="smartphone" size={18} color={theme.outline} />
+        <Text style={styles.footerText}>
+          Use Patients, Calendar, and Reports tabs for day-to-day work. Staff roles and advanced analytics remain on the web dashboard.
+        </Text>
       </View>
     </ScrollView>
   );

@@ -14,16 +14,88 @@ import {
 import * as ImagePicker from "expo-image-picker";
 import { MaterialIcons } from "@expo/vector-icons";
 import { supabase } from "../lib/supabase";
+import { isDoctorRole } from "../lib/membership";
 import { commonStyles } from "../theme/commonStyles";
 import { theme } from "../theme/theme";
 
-type StaffRole = "doctor" | "lab_technician" | "pharmacist";
+type StaffRole = "doctor" | "senior_doctor" | "lab_technician" | "pharmacist";
 
 const ROLE_LABEL: Record<StaffRole, string> = {
   doctor: "Veterinarian",
+  senior_doctor: "Senior veterinarian",
   lab_technician: "Laboratory",
   pharmacist: "Pharmacy",
 };
+
+type StaffProfileRow = {
+  id: string;
+  role: StaffRole;
+  full_name: string | null;
+  phone: string | null;
+  specialization: string | null;
+  experience_years: number | null;
+  bio: string | null;
+  photo_url: string | null;
+};
+
+async function loadOrCreateStaffProfile(clinicId: string, staffRoleHint: StaffRole): Promise<StaffProfileRow | null> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const { data: memberships } = await supabase
+    .from("user_clinic_memberships")
+    .select("role")
+    .eq("user_id", user.id)
+    .eq("clinic_id", clinicId)
+    .eq("is_active", true);
+
+  const membershipRole =
+    (memberships ?? []).find((m) => (m.role as string) === staffRoleHint)?.role ??
+    (memberships ?? []).find((m) => isDoctorRole(m.role as string) && isDoctorRole(staffRoleHint))?.role ??
+    (memberships ?? []).find((m) => ["doctor", "senior_doctor", "lab_technician", "pharmacist"].includes(m.role as string))
+      ?.role;
+
+  let query = supabase
+    .from("staff_profiles")
+    .select("id, role, full_name, phone, specialization, experience_years, bio, photo_url")
+    .eq("clinic_id", clinicId)
+    .eq("user_id", user.id)
+    .eq("is_active", true);
+
+  if (isDoctorRole(staffRoleHint)) {
+    query = query.in("role", ["doctor", "senior_doctor"]);
+  } else {
+    query = query.eq("role", staffRoleHint);
+  }
+
+  const { data: rows, error } = await query.order("created_at", { ascending: true });
+  if (error) throw new Error(error.message);
+
+  const existing = ((rows as StaffProfileRow[] | null) ?? [])[0];
+  if (existing) return existing;
+
+  const roleToCreate = (membershipRole as StaffRole | undefined) ?? staffRoleHint;
+  const meta = user.user_metadata as Record<string, string | undefined> | undefined;
+  const fullName = meta?.full_name?.trim() || meta?.name?.trim() || "Staff member";
+
+  const { data: created, error: createErr } = await supabase
+    .from("staff_profiles")
+    .insert({
+      clinic_id: clinicId,
+      user_id: user.id,
+      role: roleToCreate,
+      full_name: fullName,
+      phone: meta?.phone?.trim() || null,
+      is_active: true,
+    })
+    .select("id, role, full_name, phone, specialization, experience_years, bio, photo_url")
+    .single();
+
+  if (createErr) throw new Error(createErr.message);
+  return created as StaffProfileRow;
+}
 
 export function StaffProfileScreen({
   clinicId,
@@ -38,6 +110,7 @@ export function StaffProfileScreen({
   const [saving, setSaving] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [staffProfileId, setStaffProfileId] = useState<string | null>(null);
+  const [resolvedRole, setResolvedRole] = useState<StaffRole>(staffRole);
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [specialization, setSpecialization] = useState("");
@@ -45,49 +118,32 @@ export function StaffProfileScreen({
   const [bio, setBio] = useState("");
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
 
-  const load = useCallback(async (opts?: { silent?: boolean }) => {
-    if (!opts?.silent) setLoading(true);
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
-      setLoading(false);
-      return;
-    }
-    const { data, error } = await supabase
-      .from("staff_profiles")
-      .select("id, full_name, phone, specialization, experience_years, bio, photo_url")
-      .eq("clinic_id", clinicId)
-      .eq("user_id", user.id)
-      .eq("role", staffRole)
-      .eq("is_active", true)
-      .maybeSingle();
-
-    if (error) {
-      Alert.alert("Could not load profile", error.message);
-      setLoading(false);
-      setRefreshing(false);
-      return;
-    }
-    if (!data) {
-      Alert.alert(
-        "No staff profile",
-        "Your clinic profile row was not found. Ask an admin to confirm your role invite was accepted.",
-      );
+  const load = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      if (!opts?.silent) setLoading(true);
+      try {
+        const data = await loadOrCreateStaffProfile(clinicId, staffRole);
+        if (!data) {
+          setLoading(false);
+          setRefreshing(false);
+          return;
+        }
+        setStaffProfileId(data.id);
+        setResolvedRole(data.role);
+        setFullName(data.full_name ?? "");
+        setPhone(data.phone ?? "");
+        setSpecialization(data.specialization ?? "");
+        setExperienceYears(data.experience_years != null ? String(data.experience_years) : "");
+        setBio(data.bio ?? "");
+        setPhotoUrl(data.photo_url ?? null);
+      } catch (e) {
+        Alert.alert("Could not load profile", e instanceof Error ? e.message : "Unknown error");
+      }
       setLoading(false);
       setRefreshing(false);
-      return;
-    }
-    setStaffProfileId(data.id);
-    setFullName(data.full_name ?? "");
-    setPhone(data.phone ?? "");
-    setSpecialization(data.specialization ?? "");
-    setExperienceYears(data.experience_years != null ? String(data.experience_years) : "");
-    setBio(data.bio ?? "");
-    setPhotoUrl(data.photo_url ?? null);
-    setLoading(false);
-    setRefreshing(false);
-  }, [clinicId, staffRole]);
+    },
+    [clinicId, staffRole],
+  );
 
   useEffect(() => {
     void load();
@@ -178,6 +234,17 @@ export function StaffProfileScreen({
     );
   }
 
+  if (!staffProfileId) {
+    return (
+      <View style={[commonStyles.screen, styles.center]}>
+        <Text style={commonStyles.emptyState}>Could not set up your staff profile. Pull to refresh or contact your admin.</Text>
+        <Pressable style={[commonStyles.btnPrimary, { marginTop: 16 }]} onPress={() => void onRefresh()}>
+          <Text style={commonStyles.btnPrimaryText}>Try again</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
   return (
     <ScrollView
       style={commonStyles.screen}
@@ -187,7 +254,7 @@ export function StaffProfileScreen({
       <View style={commonStyles.card}>
         <Text style={commonStyles.cardTitle}>Your public profile</Text>
         <Text style={[commonStyles.muted, { marginBottom: 12 }]}>
-          {ROLE_LABEL[staffRole]} · This information can be shown on the clinic website (team / doctors pages).
+          {ROLE_LABEL[resolvedRole]} · This information can be shown on the clinic website (team / doctors pages).
         </Text>
 
         <View style={styles.photoRow}>
@@ -240,13 +307,13 @@ export function StaffProfileScreen({
         />
 
         <Text style={[commonStyles.sectionLabel, { marginTop: 12 }]}>
-          {staffRole === "doctor" ? "Specialization" : "Title / focus"}
+          {isDoctorRole(resolvedRole) ? "Specialization" : "Title / focus"}
         </Text>
         <TextInput
           style={commonStyles.input}
           value={specialization}
           onChangeText={setSpecialization}
-          placeholder={staffRole === "doctor" ? "e.g. Small animal surgery" : "e.g. Clinical pathology"}
+          placeholder={isDoctorRole(resolvedRole) ? "e.g. Small animal surgery" : "e.g. Clinical pathology"}
           placeholderTextColor={theme.outline}
         />
 
@@ -288,7 +355,7 @@ export function StaffProfileScreen({
 }
 
 const styles = StyleSheet.create({
-  center: { justifyContent: "center", alignItems: "center", flex: 1 },
+  center: { justifyContent: "center", alignItems: "center", flex: 1, padding: 24 },
   photoRow: { flexDirection: "row", gap: 14, marginBottom: 16, alignItems: "flex-start" },
   photo: { width: 112, height: 112, borderRadius: 56, backgroundColor: theme.surfaceContainer },
   photoPlaceholder: { justifyContent: "center", alignItems: "center" },

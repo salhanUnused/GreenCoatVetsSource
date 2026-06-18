@@ -85,6 +85,17 @@ export type OwnerVisitReport = {
   pet_name: string;
 };
 
+/** Owner portal visit timeline row (matches website /account/visits). */
+export type OwnerVisitSummaryRow = {
+  id: string;
+  pet_name: string;
+  branch_name: string;
+  visited_at: string | null;
+  status_label: string | null;
+  report_ready: boolean;
+  visit_report_pdf_generated_at: string | null;
+};
+
 export type StaffDoctorOption = {
   id: string;
   full_name: string;
@@ -114,7 +125,7 @@ export type StoreCartLine = {
 
 export type AdminMobileStats = {
   appointmentsToday: number;
-  ordersRevenueToday: number;
+  pendingTimeChanges: number;
   lowStockSkus: number;
 };
 

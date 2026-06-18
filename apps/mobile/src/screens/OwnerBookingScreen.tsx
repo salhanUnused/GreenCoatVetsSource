@@ -8,13 +8,36 @@ import { Appointment } from "../types/app";
 import { commonStyles } from "../theme/commonStyles";
 import { theme } from "../theme/theme";
 import { PetAvatar } from "../components/PetAvatar";
+import { OwnerNeonCard } from "../components/OwnerNeonCard";
+import { BookingDoctorSlotPicker, type BookingDoctor } from "../components/BookingDoctorSlotPicker";
 import { handleDateTimePickerChange } from "../lib/dateTimePickerBridge";
-import { parseAgeYearsToMonths, PET_GENDER_OPTIONS, type PetGenderValue } from "../lib/petDemographics";
+import {
+  APPOINTMENT_BOOKING_CONSENT_TEXT,
+} from "../lib/appointmentConsent";
+import {
+  monthsToAgeYearsInput,
+  normalizeBookingPetGender,
+  parseBookingAgeYearsToMonths,
+  PET_GENDER_OPTIONS,
+  type PetGenderValue,
+} from "../lib/petDemographics";
+
+const APPOINTMENT_TYPES = [
+  ["consultation", "Consult"],
+  ["vaccination", "Vaccine"],
+  ["surgery", "Surgery"],
+  ["grooming", "Grooming"],
+  ["emergency", "Emergency"],
+] as const;
 
 export function OwnerBookingScreen({
+  clinicId,
   petOptions,
   branchOptions,
+  bookingDoctors,
   appointments,
+  ownerFullName,
+  ownerNeedsName,
   ownerPhone,
   ownerEmail,
   onCreate,
@@ -22,22 +45,37 @@ export function OwnerBookingScreen({
   onRequestTimeChange,
   timeChangeRequests,
 }: {
-  petOptions: Array<{ id: string; name: string; photo_url?: string | null }>;
+  clinicId: string;
+  petOptions: Array<{
+    id: string;
+    name: string;
+    photo_url?: string | null;
+    gender?: string | null;
+    age_months?: number | null;
+  }>;
   branchOptions: Array<{ id: string; name: string }>;
+  bookingDoctors: BookingDoctor[];
   appointments: Appointment[];
+  ownerFullName?: string | null;
+  ownerNeedsName?: boolean;
   ownerPhone?: string | null;
   ownerEmail?: string | null;
   onCreate: (input: {
     petId?: string;
     branchId: string;
     appointmentType: string;
+    doctorId?: string | null;
     startsAt: string;
     notes: string;
     chiefComplaint?: string;
     allergies?: string;
     currentMedications?: string;
+    contactFullName: string;
     contactPhone: string;
     contactEmail?: string;
+    petGender?: string | null;
+    petAgeYears?: string;
+    bookingConsent: boolean;
     newPetName?: string;
     newPetSpecies?: string;
     newPetBreed?: string;
@@ -45,15 +83,17 @@ export function OwnerBookingScreen({
     newPetAgeMonths?: number | null;
   }) => Promise<void>;
   onCancelAppointment: (appointmentId: string) => Promise<void>;
-  /** Sends a request to the clinic — staff must approve before the time changes. */
   onRequestTimeChange: (appointmentId: string, startsAtIso: string, notes?: string) => Promise<void>;
   timeChangeRequests: Array<{ appointment_id: string; requested_starts_at: string; status: string }>;
 }) {
   const hasPets = petOptions.length > 0;
+  const hasBookingDoctors = bookingDoctors.length > 0;
   const [petId, setPetId] = useState(() => (hasPets ? petOptions[0]?.id ?? "" : ""));
   const [branchId, setBranchId] = useState("");
   const [appointmentType, setAppointmentType] = useState("consultation");
+  const [doctorId, setDoctorId] = useState("");
   const [startsAt, setStartsAt] = useState(new Date());
+  const [slotStartsAt, setSlotStartsAt] = useState("");
   const [showTimePicker, setShowTimePicker] = useState(false);
 
   const [notes, setNotes] = useState("");
@@ -61,13 +101,18 @@ export function OwnerBookingScreen({
   const [allergies, setAllergies] = useState("");
   const [currentMedications, setCurrentMedications] = useState("");
 
+  const [contactFullName, setContactFullName] = useState(ownerFullName ?? "");
   const [contactPhone, setContactPhone] = useState(ownerPhone ?? "");
   const [contactEmail, setContactEmail] = useState(ownerEmail ?? "");
+  const [bookingConsent, setBookingConsent] = useState(false);
+
+  const [petGender, setPetGender] = useState<PetGenderValue | "">("");
+  const [petAgeYears, setPetAgeYears] = useState("");
 
   const [newPetName, setNewPetName] = useState("");
   const [newPetSpecies, setNewPetSpecies] = useState(DEFAULT_PET_SPECIES_BOOKING_VALUE);
   const [newPetBreed, setNewPetBreed] = useState("");
-  const [newPetGender, setNewPetGender] = useState<PetGenderValue>("unknown");
+  const [newPetGender, setNewPetGender] = useState<PetGenderValue | "">("");
   const [newPetAgeYears, setNewPetAgeYears] = useState("");
 
   const [rescheduleId, setRescheduleId] = useState<string | null>(null);
@@ -81,11 +126,22 @@ export function OwnerBookingScreen({
   }, [ownerPhone, ownerEmail]);
 
   useEffect(() => {
+    if (!ownerNeedsName) setContactFullName(ownerFullName ?? "");
+  }, [ownerFullName, ownerNeedsName]);
+
+  useEffect(() => {
     if (petOptions.length && !petId) setPetId(petOptions[0]?.id ?? "");
   }, [petOptions, petId]);
 
-  const [calendarYear, setCalendarYear] = useState(startsAt.getFullYear());
-  const [calendarMonthIndex, setCalendarMonthIndex] = useState(startsAt.getMonth());
+  useEffect(() => {
+    if (!hasPets || !petId) return;
+    const pet = petOptions.find((p) => p.id === petId);
+    if (!pet) return;
+    setPetGender((normalizeBookingPetGender(pet.gender) ?? "") as PetGenderValue | "");
+    setPetAgeYears(monthsToAgeYearsInput(pet.age_months));
+  }, [hasPets, petId, petOptions]);
+
+  const useManualDateTime = !hasBookingDoctors || !doctorId;
 
   function onChangeTime(event: DateTimePickerEvent, selectedDate?: Date) {
     const evType = "type" in event ? event.type : "set";
@@ -121,13 +177,16 @@ export function OwnerBookingScreen({
 
   const weekdayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
 
+  const [calendarYear, setCalendarYear] = useState(startsAt.getFullYear());
+  const [calendarMonthIndex, setCalendarMonthIndex] = useState(startsAt.getMonth());
+
   const monthLabel = useMemo(() => {
     const d = new Date(calendarYear, calendarMonthIndex, 1);
     return d.toLocaleString(undefined, { month: "long" });
   }, [calendarYear, calendarMonthIndex]);
 
   const firstDayOfMonth = new Date(calendarYear, calendarMonthIndex, 1);
-  const firstDayIndexMon0 = (firstDayOfMonth.getDay() + 6) % 7; // make Monday=0
+  const firstDayIndexMon0 = (firstDayOfMonth.getDay() + 6) % 7;
   const daysInMonth = new Date(calendarYear, calendarMonthIndex + 1, 0).getDate();
   const totalCells = 42;
 
@@ -149,24 +208,100 @@ export function OwnerBookingScreen({
   }
 
   const selectedDateLabel = startsAt.toLocaleDateString();
+  const resolvedStartsAtIso = useManualDateTime ? startsAt.toISOString() : slotStartsAt;
+
+  function submitBooking() {
+    if (!branchId.trim()) {
+      Alert.alert("Select a branch", "Choose a clinic location.");
+      return;
+    }
+    if (!contactPhone.trim()) {
+      Alert.alert("Contact phone required", "Add a phone number so the clinic can reach you.");
+      return;
+    }
+    const fullName = (ownerNeedsName ? contactFullName : ownerFullName ?? contactFullName).trim();
+    if (!fullName) {
+      Alert.alert("Full name required", "Enter your full name for this booking.");
+      return;
+    }
+    if (!bookingConsent) {
+      Alert.alert("Consent required", "Please accept the booking consent before submitting.");
+      return;
+    }
+    if (hasBookingDoctors && doctorId && !slotStartsAt) {
+      Alert.alert("Select a time slot", "Choose an available slot for the selected doctor.");
+      return;
+    }
+    if (useManualDateTime && !startsAt) {
+      Alert.alert("Select date & time", "Choose when you would like to visit.");
+      return;
+    }
+
+    if (hasPets) {
+      if (!petId.trim()) {
+        Alert.alert("Select a pet", "Choose which pet this appointment is for.");
+        return;
+      }
+    } else {
+      if (!newPetName.trim()) {
+        Alert.alert("Pet name required", "Enter the name for your new pet.");
+        return;
+      }
+      if (!newPetSpecies.trim()) {
+        Alert.alert("Species required", "Select a species for your new pet.");
+        return;
+      }
+      if (!newPetGender) {
+        Alert.alert("Pet gender required", "Select a gender for your new pet.");
+        return;
+      }
+      if (!parseBookingAgeYearsToMonths(newPetAgeYears)) {
+        Alert.alert("Pet age required", "Enter your pet's age in years (e.g. 3 or 0.5).");
+        return;
+      }
+    }
+
+    void onCreate({
+      petId: hasPets ? petId : undefined,
+      newPetName: hasPets ? undefined : newPetName.trim(),
+      newPetSpecies: hasPets ? undefined : newPetSpecies.trim(),
+      newPetBreed: hasPets ? undefined : newPetBreed.trim() || undefined,
+      newPetGender: hasPets ? undefined : newPetGender || null,
+      newPetAgeMonths: hasPets ? undefined : parseBookingAgeYearsToMonths(newPetAgeYears),
+      branchId,
+      appointmentType,
+      doctorId: doctorId || null,
+      startsAt: resolvedStartsAtIso,
+      notes,
+      chiefComplaint: chiefComplaint.trim() || undefined,
+      allergies: allergies.trim() || undefined,
+      currentMedications: currentMedications.trim() || undefined,
+      contactFullName: fullName,
+      contactPhone: contactPhone.trim(),
+      contactEmail: contactEmail.trim() || undefined,
+      petGender: hasPets ? petGender || null : undefined,
+      petAgeYears: hasPets ? petAgeYears.trim() || undefined : undefined,
+      bookingConsent: true,
+    });
+  }
 
   return (
     <ScrollView style={commonStyles.screen} contentContainerStyle={[commonStyles.scrollContent, { paddingBottom: 40 }]}>
-      <View style={commonStyles.card}>
+      <OwnerNeonCard>
         <Text style={commonStyles.cardTitle}>Book appointment</Text>
         <Text style={[commonStyles.muted, { marginBottom: 14 }]}>
-          Choose pet, location, and time. The clinic assigns a clinician — you do not pick a doctor in the app.
+          {hasBookingDoctors
+            ? "Pick a doctor and an open time slot, or leave the doctor blank for clinic assignment."
+            : "The clinic will assign a clinician for your visit."}
         </Text>
 
         <View style={styles.typeRow}>
-          {(
-            [
-              ["consultation", "Consult"],
-              ["vaccination", "Vaccine"],
-              ["emergency", "Emergency"],
-            ] as const
-          ).map(([value, label]) => (
-            <Pressable key={value} style={[styles.typeChip, appointmentType === value && styles.typeChipOn]} onPress={() => setAppointmentType(value)}>
+          {APPOINTMENT_TYPES.map(([value, label]) => (
+            <Pressable
+              key={value}
+              style={[styles.typeChip, appointmentType === value && styles.typeChipOn]}
+              onPress={() => setAppointmentType(value)}
+            >
               <Text style={[styles.typeChipText, appointmentType === value && styles.typeChipTextOn]}>{label}</Text>
             </Pressable>
           ))}
@@ -174,18 +309,49 @@ export function OwnerBookingScreen({
 
         <Text style={commonStyles.sectionLabel}>Pet</Text>
         {hasPets ? (
-          <View style={styles.chipRow}>
-            {petOptions.map((pet) => (
+          <>
+            <View style={styles.chipRow}>
+              {petOptions.map((pet) => (
+                <Pressable
+                  key={pet.id}
+                  style={[styles.chip, petId === pet.id && styles.chipActive]}
+                  onPress={() => setPetId(pet.id)}
+                >
+                  <PetAvatar uri={pet.photo_url} size={24} />
+                  <Text style={[styles.chipText, petId === pet.id && styles.chipTextActive]}>{pet.name}</Text>
+                </Pressable>
+              ))}
+            </View>
+            <Text style={[commonStyles.sectionLabel, { marginTop: 12 }]}>Pet gender</Text>
+            <View style={styles.speciesChipWrap}>
               <Pressable
-                key={pet.id}
-                style={[styles.chip, petId === pet.id && styles.chipActive]}
-                onPress={() => setPetId(pet.id)}
+                style={[styles.speciesChip, petGender === "" && styles.speciesChipOn]}
+                onPress={() => setPetGender("")}
               >
-                <PetAvatar uri={pet.photo_url} size={24} />
-                <Text style={[styles.chipText, petId === pet.id && styles.chipTextActive]}>{pet.name}</Text>
+                <Text style={[styles.speciesChipText, petGender === "" && styles.speciesChipTextOn]}>Keep existing</Text>
               </Pressable>
-            ))}
-          </View>
+              {PET_GENDER_OPTIONS.map((opt) => (
+                <Pressable
+                  key={opt.value}
+                  style={[styles.speciesChip, petGender === opt.value && styles.speciesChipOn]}
+                  onPress={() => setPetGender(opt.value)}
+                >
+                  <Text style={[styles.speciesChipText, petGender === opt.value && styles.speciesChipTextOn]}>
+                    {opt.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+            <Text style={[commonStyles.sectionLabel, { marginTop: 8 }]}>Pet age (years)</Text>
+            <TextInput
+              style={commonStyles.input}
+              value={petAgeYears}
+              onChangeText={setPetAgeYears}
+              placeholder="Optional for existing pet"
+              placeholderTextColor={theme.outline}
+              keyboardType="decimal-pad"
+            />
+          </>
         ) : (
           <View>
             <Text style={[commonStyles.muted, { marginTop: 2, marginBottom: 10 }]}>
@@ -233,12 +399,12 @@ export function OwnerBookingScreen({
                 </Pressable>
               ))}
             </View>
-            <Text style={[commonStyles.sectionLabel, { marginTop: 8 }]}>Approx. age (years)</Text>
+            <Text style={[commonStyles.sectionLabel, { marginTop: 8 }]}>Age (years)</Text>
             <TextInput
               style={commonStyles.input}
               value={newPetAgeYears}
               onChangeText={setNewPetAgeYears}
-              placeholder="e.g. 2 or 0.5 (optional)"
+              placeholder="e.g. 3"
               placeholderTextColor={theme.outline}
               keyboardType="decimal-pad"
             />
@@ -258,58 +424,80 @@ export function OwnerBookingScreen({
           ))}
         </View>
 
-        <Text style={[commonStyles.sectionLabel, { marginTop: 16 }]}>Date</Text>
-        <View style={styles.calendarCard}>
-          <View style={styles.calendarHeader}>
-            <Pressable onPress={() => shiftMonth(-1)} style={styles.calendarNavBtn}>
-              <MaterialIcons name="chevron-left" size={22} color={theme.onSurface} />
-            </Pressable>
-            <View style={{ flex: 1, alignItems: "center" }}>
-              <Text style={styles.calendarHeaderText}>
-                {monthLabel} {calendarYear}
-              </Text>
-            </View>
-            <Pressable onPress={() => shiftMonth(1)} style={styles.calendarNavBtn}>
-              <MaterialIcons name="chevron-right" size={22} color={theme.onSurface} />
-            </Pressable>
-          </View>
+        {hasBookingDoctors && clinicId ? (
+          <BookingDoctorSlotPicker
+            clinicId={clinicId}
+            branchId={branchId}
+            doctors={bookingDoctors}
+            optionalDoctor
+            doctorId={doctorId}
+            onDoctorIdChange={setDoctorId}
+            startsAt={slotStartsAt}
+            onStartsAtChange={setSlotStartsAt}
+          />
+        ) : null}
 
-          <View style={styles.weekRow}>
-            {weekdayLabels.map((w) => (
-              <Text key={w} style={styles.weekCellText}>
-                {w}
-              </Text>
-            ))}
-          </View>
-
-          <View style={styles.grid}>
-            {Array.from({ length: totalCells }).map((_, i) => {
-              const dayNum = i - firstDayIndexMon0 + 1;
-              const isValid = dayNum >= 1 && dayNum <= daysInMonth;
-              if (!isValid) return <View key={`empty-${i}`} />;
-
-              const selected = isSameDay(startsAt, calendarYear, calendarMonthIndex, dayNum);
-              return (
-                <Pressable
-                  key={`d-${dayNum}-${i}`}
-                  style={[styles.dayCell, selected && styles.dayCellSelected]}
-                  onPress={() => pickDay(dayNum)}
-                >
-                  <Text style={[styles.dayCellText, selected && styles.dayCellTextSelected]}>{dayNum}</Text>
+        {useManualDateTime ? (
+          <>
+            <Text style={[commonStyles.sectionLabel, { marginTop: 16 }]}>Date</Text>
+            <View style={styles.calendarCard}>
+              <View style={styles.calendarHeader}>
+                <Pressable onPress={() => shiftMonth(-1)} style={styles.calendarNavBtn}>
+                  <MaterialIcons name="chevron-left" size={22} color={theme.onSurface} />
                 </Pressable>
-              );
-            })}
-          </View>
-        </View>
+                <View style={{ flex: 1, alignItems: "center" }}>
+                  <Text style={styles.calendarHeaderText}>
+                    {monthLabel} {calendarYear}
+                  </Text>
+                </View>
+                <Pressable onPress={() => shiftMonth(1)} style={styles.calendarNavBtn}>
+                  <MaterialIcons name="chevron-right" size={22} color={theme.onSurface} />
+                </Pressable>
+              </View>
 
-        <Text style={[commonStyles.sectionLabel, { marginTop: 14 }]}>Time</Text>
-        <Pressable style={styles.dateBtn} onPress={() => setShowTimePicker(true)}>
-          <Text style={styles.dateBtnText}>
-            {selectedDateLabel} · {startsAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-          </Text>
-        </Pressable>
-        {showTimePicker ? (
-          <DateTimePicker value={startsAt} mode="time" display={Platform.OS === "ios" ? "inline" : "default"} onChange={onChangeTime} />
+              <View style={styles.weekRow}>
+                {weekdayLabels.map((w) => (
+                  <Text key={w} style={styles.weekCellText}>
+                    {w}
+                  </Text>
+                ))}
+              </View>
+
+              <View style={styles.grid}>
+                {Array.from({ length: totalCells }).map((_, i) => {
+                  const dayNum = i - firstDayIndexMon0 + 1;
+                  const isValid = dayNum >= 1 && dayNum <= daysInMonth;
+                  if (!isValid) return <View key={`empty-${i}`} />;
+
+                  const selected = isSameDay(startsAt, calendarYear, calendarMonthIndex, dayNum);
+                  return (
+                    <Pressable
+                      key={`d-${dayNum}-${i}`}
+                      style={[styles.dayCell, selected && styles.dayCellSelected]}
+                      onPress={() => pickDay(dayNum)}
+                    >
+                      <Text style={[styles.dayCellText, selected && styles.dayCellTextSelected]}>{dayNum}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+
+            <Text style={[commonStyles.sectionLabel, { marginTop: 14 }]}>Time</Text>
+            <Pressable style={styles.dateBtn} onPress={() => setShowTimePicker(true)}>
+              <Text style={styles.dateBtnText}>
+                {selectedDateLabel} · {startsAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              </Text>
+            </Pressable>
+            {showTimePicker ? (
+              <DateTimePicker
+                value={startsAt}
+                mode="time"
+                display={Platform.OS === "ios" ? "inline" : "default"}
+                onChange={onChangeTime}
+              />
+            ) : null}
+          </>
         ) : null}
 
         <Text style={[commonStyles.sectionLabel, { marginTop: 16 }]}>Chief complaint / main concern</Text>
@@ -327,41 +515,45 @@ export function OwnerBookingScreen({
           style={[commonStyles.input, { minHeight: 56, textAlignVertical: "top" }]}
           value={allergies}
           onChangeText={setAllergies}
-          placeholder="Optional"
+          placeholder="None / food, drugs, environmental…"
           placeholderTextColor={theme.outline}
           multiline
         />
 
-        <Text style={[commonStyles.sectionLabel, { marginTop: 16 }]}>Current medications</Text>
+        <Text style={[commonStyles.sectionLabel, { marginTop: 16 }]}>Current medications / supplements</Text>
         <TextInput
           style={[commonStyles.input, { minHeight: 56, textAlignVertical: "top" }]}
           value={currentMedications}
           onChangeText={setCurrentMedications}
-          placeholder="Optional"
+          placeholder="None or list as prescribed"
           placeholderTextColor={theme.outline}
           multiline
         />
 
-        <Text style={[commonStyles.sectionLabel, { marginTop: 16 }]}>Notes</Text>
-        <TextInput
-          style={[commonStyles.input, { minHeight: 72, textAlignVertical: "top" }]}
-          value={notes}
-          onChangeText={setNotes}
-          placeholder="Optional notes for the clinic"
-          placeholderTextColor={theme.outline}
-          multiline
-        />
+        {ownerNeedsName ? (
+          <>
+            <Text style={[commonStyles.sectionLabel, { marginTop: 16 }]}>Owner full name</Text>
+            <TextInput
+              style={commonStyles.input}
+              value={contactFullName}
+              onChangeText={setContactFullName}
+              placeholder="Enter your full name"
+              placeholderTextColor={theme.outline}
+              autoComplete="name"
+            />
+          </>
+        ) : null}
 
-        <Text style={[commonStyles.sectionLabel, { marginTop: 16 }]}>Contact phone</Text>
+        <Text style={[commonStyles.sectionLabel, { marginTop: 16 }]}>Contact phone (confirm)</Text>
         <TextInput
           style={commonStyles.input}
           value={contactPhone}
           onChangeText={setContactPhone}
-          placeholder="Phone number"
+          placeholder="+91 98765 43210"
           placeholderTextColor={theme.outline}
           keyboardType="phone-pad"
         />
-        <Text style={[commonStyles.sectionLabel, { marginTop: 16 }]}>Contact email (optional)</Text>
+        <Text style={[commonStyles.sectionLabel, { marginTop: 16 }]}>Contact email (confirm)</Text>
         <TextInput
           style={commonStyles.input}
           value={contactEmail}
@@ -372,63 +564,41 @@ export function OwnerBookingScreen({
           autoCapitalize="none"
         />
 
+        <Text style={[commonStyles.sectionLabel, { marginTop: 16 }]}>Notes (optional)</Text>
+        <TextInput
+          style={[commonStyles.input, { minHeight: 72, textAlignVertical: "top" }]}
+          value={notes}
+          onChangeText={setNotes}
+          placeholder="Anything else for the team"
+          placeholderTextColor={theme.outline}
+          multiline
+        />
+
         <Pressable
-          onPress={() => {
-            if (!branchId.trim()) {
-              Alert.alert("Select a branch", "Choose a clinic location.");
-              return;
-            }
-            if (!contactPhone.trim()) {
-              Alert.alert("Contact phone required", "Add a phone number so the clinic can reach you.");
-              return;
-            }
-            if (hasPets) {
-              if (!petId.trim()) {
-                Alert.alert("Select a pet", "Choose which pet this appointment is for.");
-                return;
-              }
-            } else {
-              if (!newPetName.trim()) {
-                Alert.alert("Pet name required", "Enter the name for your new pet.");
-                return;
-              }
-              if (!newPetSpecies.trim()) {
-                Alert.alert("Species required", "Select a species for your new pet.");
-                return;
-              }
-            }
-            void onCreate({
-              petId: hasPets ? petId : undefined,
-              newPetName: hasPets ? undefined : newPetName.trim(),
-              newPetSpecies: hasPets ? undefined : newPetSpecies.trim(),
-              newPetBreed: hasPets ? undefined : newPetBreed.trim() || undefined,
-              newPetGender: hasPets ? undefined : newPetGender,
-              newPetAgeMonths: hasPets ? undefined : parseAgeYearsToMonths(newPetAgeYears),
-              branchId,
-              appointmentType,
-              startsAt: startsAt.toISOString(),
-              notes,
-              chiefComplaint: chiefComplaint.trim() || undefined,
-              allergies: allergies.trim() || undefined,
-              currentMedications: currentMedications.trim() || undefined,
-              contactPhone: contactPhone.trim(),
-              contactEmail: contactEmail.trim() || undefined,
-            });
-          }}
-          style={({ pressed }) => [{ opacity: pressed ? 0.9 : 1, marginTop: 20 }]}
+          style={[styles.consentBox, bookingConsent && styles.consentBoxOn]}
+          onPress={() => setBookingConsent((v) => !v)}
         >
+          <MaterialIcons
+            name={bookingConsent ? "check-box" : "check-box-outline-blank"}
+            size={22}
+            color={bookingConsent ? theme.primary : theme.outline}
+          />
+          <Text style={styles.consentText}>{APPOINTMENT_BOOKING_CONSENT_TEXT}</Text>
+        </Pressable>
+
+        <Pressable onPress={submitBooking} style={({ pressed }) => [{ opacity: pressed ? 0.9 : 1, marginTop: 20 }]}>
           <LinearGradient
             colors={[theme.gradientStart, theme.gradientEnd]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.cta}
           >
-            <Text style={styles.ctaText}>Create appointment</Text>
+            <Text style={styles.ctaText}>Confirm appointment</Text>
           </LinearGradient>
         </Pressable>
-      </View>
+      </OwnerNeonCard>
 
-      <View style={commonStyles.card}>
+      <OwnerNeonCard>
         <Text style={commonStyles.cardTitle}>My appointments</Text>
         <Text style={[commonStyles.muted, { marginBottom: 12 }]}>
           To change the time, send a request — reception will confirm or suggest another slot.
@@ -488,10 +658,10 @@ export function OwnerBookingScreen({
           );
         })}
         {!mine.length ? <Text style={commonStyles.emptyState}>No appointments yet.</Text> : null}
-      </View>
+      </OwnerNeonCard>
 
       {rescheduleId ? (
-        <View style={commonStyles.card}>
+        <OwnerNeonCard>
           <Text style={commonStyles.cardTitle}>Request new time</Text>
           <Text style={[commonStyles.muted, { marginBottom: 12 }]}>
             The clinic will review your preferred time and confirm. Your appointment stays at the current time until they approve.
@@ -501,12 +671,7 @@ export function OwnerBookingScreen({
             <Text style={styles.dateBtnText}>{rescheduleAt.toLocaleString()}</Text>
           </Pressable>
           {showReschedulePicker ? (
-            <DateTimePicker
-              value={rescheduleAt}
-              mode="datetime"
-              display="default"
-              onChange={onChangeReschedule}
-            />
+            <DateTimePicker value={rescheduleAt} mode="datetime" display="default" onChange={onChangeReschedule} />
           ) : null}
           <Text style={[commonStyles.sectionLabel, { marginTop: 14 }]}>Note to clinic (optional)</Text>
           <TextInput
@@ -524,15 +689,15 @@ export function OwnerBookingScreen({
             <Pressable
               style={commonStyles.btnPrimary}
               onPress={() =>
-                void onRequestTimeChange(rescheduleId, rescheduleAt.toISOString(), rescheduleNotes.trim() || undefined).then(() =>
-                  setRescheduleId(null),
+                void onRequestTimeChange(rescheduleId, rescheduleAt.toISOString(), rescheduleNotes.trim() || undefined).then(
+                  () => setRescheduleId(null),
                 )
               }
             >
               <Text style={commonStyles.btnPrimaryText}>Submit request</Text>
             </Pressable>
           </View>
-        </View>
+        </OwnerNeonCard>
       ) : null}
     </ScrollView>
   );
@@ -578,7 +743,6 @@ const styles = StyleSheet.create({
     borderColor: theme.outlineVariant,
   },
   dateBtnText: { fontWeight: "600", color: theme.onSurface, fontSize: 15 },
-
   speciesChipWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 },
   speciesChip: {
     paddingHorizontal: 12,
@@ -591,7 +755,19 @@ const styles = StyleSheet.create({
   speciesChipOn: { borderColor: theme.primary, backgroundColor: `${theme.primary}18` },
   speciesChipText: { fontSize: 11, fontWeight: "600", color: theme.onSurface },
   speciesChipTextOn: { color: theme.primary, fontWeight: "800" },
-
+  consentBox: {
+    marginTop: 16,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: `${theme.primary}33`,
+    backgroundColor: `${theme.primary}0D`,
+  },
+  consentBoxOn: { borderColor: theme.primary, backgroundColor: `${theme.primary}18` },
+  consentText: { flex: 1, fontSize: 13, lineHeight: 19, color: theme.onSurface },
   calendarCard: {
     marginTop: 10,
     padding: 12,

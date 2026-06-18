@@ -14,6 +14,9 @@ import {
   View,
 } from "react-native";
 import DateTimePicker, { DateTimePickerEvent } from "@react-native-community/datetimepicker";
+import { MaterialIcons } from "@expo/vector-icons";
+import { AppointmentStatusPicker } from "../components/AppointmentStatusPicker";
+import { fetchVisitAttachments, openVisitAttachment, type VisitAttachmentRow } from "../lib/visitAttachments";
 import { handleDateTimePickerChange } from "../lib/dateTimePickerBridge";
 import { supabase } from "../lib/supabase";
 import { DoctorStackParamList } from "../navigation/types";
@@ -87,14 +90,16 @@ export function DoctorConsultScreen({
   doctorStaffId,
   ensureVisitForAppointment,
   onUploadVisitImage,
+  onUploadDocument,
   onStatusChange,
   medicineNames,
   onRefresh,
 }: {
   clinicId: string;
   doctorStaffId: string | null;
-  ensureVisitForAppointment: (appointmentId: string, complete?: boolean) => Promise<string | null>;
+  ensureVisitForAppointment: (appointmentId: string, complete?: boolean, checkIn?: boolean) => Promise<string | null>;
   onUploadVisitImage: (appointmentId: string, uri: string, mimeType?: string, base64?: string | null) => Promise<void>;
+  onUploadDocument: (appointmentId: string) => Promise<void>;
   onStatusChange: (appointmentId: string, status: string) => Promise<void>;
   medicineNames: string[];
   onRefresh: () => void;
@@ -132,6 +137,9 @@ export function DoctorConsultScreen({
   const [vaccineName, setVaccineName] = useState("");
   const [vaccineNextDue, setVaccineNextDue] = useState<Date | null>(null);
   const [showVaccineDuePicker, setShowVaccineDuePicker] = useState(false);
+  const [appointmentStatus, setAppointmentStatus] = useState("scheduled");
+  const [attachments, setAttachments] = useState<VisitAttachmentRow[]>([]);
+  const [showStatusPicker, setShowStatusPicker] = useState(false);
 
   const medsFiltered = useMemo(() => {
     const q = medQuery.trim().toLowerCase();
@@ -147,10 +155,16 @@ export function DoctorConsultScreen({
     }
     setLoading(true);
 
-    const vid = await ensureVisitForAppointment(appointmentId, false);
+    const vid = await ensureVisitForAppointment(appointmentId, false, true);
     setVisitId(vid);
 
     if (vid) {
+      try {
+        const rows = await fetchVisitAttachments(vid);
+        setAttachments(rows);
+      } catch {
+        setAttachments([]);
+      }
       const { data: visit } = await supabase
         .from("visits")
         .select("symptoms, diagnosis, treatment_plan, follow_up_at")
@@ -167,7 +181,7 @@ export function DoctorConsultScreen({
     const { data: appt } = await supabase
       .from("appointments")
       .select(
-        "pet_id, doctor_id, appointment_type, owners(full_name, phone), pets(id, name, breed, age_months, date_of_birth, allergies, chronic_diseases, photo_url)"
+        "pet_id, doctor_id, appointment_type, status, owners(full_name, phone), pets(id, name, breed, age_months, date_of_birth, allergies, chronic_diseases, photo_url)"
       )
       .eq("id", appointmentId)
       .eq("clinic_id", clinicId)
@@ -191,6 +205,7 @@ export function DoctorConsultScreen({
 
     setPetQuick(pet ?? null);
     setAppointmentType((appt as { appointment_type?: string } | null)?.appointment_type ?? null);
+    setAppointmentStatus((appt as { status?: string } | null)?.status ?? "scheduled");
     setOwnerName(owner?.full_name ?? "Owner");
     setOwnerPhone(owner?.phone ?? "");
     setClinicName((clinicRow as { name?: string } | null)?.name ?? "Clinic");
@@ -551,6 +566,27 @@ export function DoctorConsultScreen({
     const asset = result.assets[0];
     await onUploadVisitImage(appointmentId, asset.uri, asset.mimeType ?? "image/jpeg", asset.base64 ?? null);
     await onRefresh();
+    if (visitId) {
+      try {
+        setAttachments(await fetchVisitAttachments(visitId));
+      } catch {
+        /* ignore */
+      }
+    }
+    await load();
+  }
+
+  async function uploadDocument() {
+    if (!appointmentId) return;
+    await onUploadDocument(appointmentId);
+    if (visitId) {
+      try {
+        setAttachments(await fetchVisitAttachments(visitId));
+      } catch {
+        /* ignore */
+      }
+    }
+    await load();
   }
 
   function onFollowChange(e: DateTimePickerEvent, date?: Date) {
@@ -597,6 +633,10 @@ export function DoctorConsultScreen({
         </View>
         {petQuick?.allergies ? <Text style={styles.alertText}>Allergies: {petQuick.allergies}</Text> : <Text style={commonStyles.muted}>No allergy alerts.</Text>}
         {petQuick?.chronic_diseases ? <Text style={styles.alertText}>Chronic: {petQuick.chronic_diseases}</Text> : null}
+        <Pressable style={styles.statusBtn} onPress={() => setShowStatusPicker(true)}>
+          <Text style={styles.statusBtnLabel}>Appointment status</Text>
+          <Text style={styles.statusBtnValue}>{appointmentStatus.replaceAll("_", " ")}</Text>
+        </Pressable>
       </View>
 
       <View style={[commonStyles.card, styles.glassCard]}>
@@ -692,8 +732,54 @@ export function DoctorConsultScreen({
       </View>
 
       <View style={[commonStyles.card, styles.glassCard]}>
+        <Text style={commonStyles.cardTitle}>Visit documents</Text>
+        <Text style={[commonStyles.muted, { marginBottom: 10 }]}>
+          Lab reports, PDFs, and images are stored on this visit (same as the web portal).
+        </Text>
+        <View style={commonStyles.actionRow}>
+          <Pressable style={commonStyles.btnOutline} onPress={() => void pickImage(true)}>
+            <Text style={commonStyles.btnOutlineText}>Camera</Text>
+          </Pressable>
+          <Pressable style={commonStyles.btnOutline} onPress={() => void pickImage(false)}>
+            <Text style={commonStyles.btnOutlineText}>Gallery</Text>
+          </Pressable>
+          <Pressable style={commonStyles.btnPrimary} onPress={() => void uploadDocument()}>
+            <Text style={commonStyles.btnPrimaryText}>Upload file</Text>
+          </Pressable>
+        </View>
+        {attachments.length ? (
+          <View style={styles.attachList}>
+            {attachments.map((file) => (
+              <Pressable
+                key={file.id}
+                style={styles.attachRow}
+                onPress={() => {
+                  void openVisitAttachment(file).catch((err) => {
+                    Alert.alert("Open failed", err instanceof Error ? err.message : "Could not open file.");
+                  });
+                }}
+              >
+                <MaterialIcons
+                  name={file.mime_type?.startsWith("image/") ? "image" : "description"}
+                  size={20}
+                  color={theme.primary}
+                />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.attachName}>{file.file_name ?? "Attachment"}</Text>
+                  <Text style={commonStyles.muted}>{new Date(file.created_at).toLocaleString()}</Text>
+                </View>
+                <MaterialIcons name="open-in-new" size={18} color={theme.outline} />
+              </Pressable>
+            ))}
+          </View>
+        ) : (
+          <Text style={[commonStyles.emptyState, { marginTop: 10 }]}>No documents yet — upload from here or the queue.</Text>
+        )}
+      </View>
+
+      <View style={[commonStyles.card, styles.glassCard]}>
         <Text style={commonStyles.cardTitle}>Imaging uploads</Text>
-        <Text style={[commonStyles.muted, { marginBottom: 10 }]}>Wounds, infections, reports, and x-rays are auto-linked to this consultation.</Text>
+        <Text style={[commonStyles.muted, { marginBottom: 10 }]}>Quick camera shortcuts — files also appear in Visit documents above.</Text>
         <View style={commonStyles.actionRow}>
           <Pressable style={commonStyles.btnOutline} onPress={() => void pickImage(true)}><Text style={commonStyles.btnOutlineText}>Camera</Text></Pressable>
           <Pressable style={commonStyles.btnOutline} onPress={() => void pickImage(false)}><Text style={commonStyles.btnOutlineText}>Gallery</Text></Pressable>
@@ -770,6 +856,19 @@ export function DoctorConsultScreen({
           </Pressable>
         </View>
       </View>
+
+      <AppointmentStatusPicker
+        visible={showStatusPicker}
+        currentStatus={appointmentStatus}
+        onClose={() => setShowStatusPicker(false)}
+        onSelect={(status) => {
+          if (!appointmentId) return;
+          void onStatusChange(appointmentId, status).then(() => {
+            setAppointmentStatus(status);
+            void onRefresh();
+          });
+        }}
+      />
     </ScrollView>
   );
 }
@@ -783,6 +882,28 @@ const styles = StyleSheet.create({
   },
   em: { fontWeight: "800", fontSize: 18, color: theme.onSurface },
   patientRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 8 },
+  statusBtn: {
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: theme.outlineVariant,
+    backgroundColor: theme.surfaceContainer,
+  },
+  statusBtnLabel: { fontSize: 11, fontWeight: "800", color: theme.onSurfaceVariant, textTransform: "uppercase", letterSpacing: 0.8 },
+  statusBtnValue: { marginTop: 4, fontSize: 15, fontWeight: "800", color: theme.primary, textTransform: "capitalize" },
+  attachList: { marginTop: 12, gap: 8 },
+  attachRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    padding: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: theme.outlineVariant,
+    backgroundColor: theme.surfaceBright,
+  },
+  attachName: { fontWeight: "700", color: theme.onSurface },
   alertText: { color: theme.error, fontWeight: "700", fontSize: 13, marginTop: 6 },
   tall: { minHeight: 88, textAlignVertical: "top" },
   dateBtn: {

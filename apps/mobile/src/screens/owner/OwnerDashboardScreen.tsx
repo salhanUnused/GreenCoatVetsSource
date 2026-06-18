@@ -5,6 +5,7 @@ import { summarizePrescriptionForDashboard } from "../../lib/formatPrescription"
 import { commonStyles } from "../../theme/commonStyles";
 import { theme } from "../../theme/theme";
 import { Appointment, OwnerPrescription, OwnerVisitReport, Pet } from "../../types/app";
+import { OwnerNeonCard } from "../../components/OwnerNeonCard";
 import { PetAvatar } from "../../components/PetAvatar";
 
 type Vac = {
@@ -127,7 +128,7 @@ export function OwnerDashboardScreen({
         </Pressable>
       </View>
 
-      <View style={commonStyles.card}>
+      <OwnerNeonCard>
         <Text style={commonStyles.cardTitle}>Upcoming appointment</Text>
         {nextAppt ? (
           <View style={styles.row}>
@@ -148,9 +149,9 @@ export function OwnerDashboardScreen({
         ) : (
           <Text style={commonStyles.emptyState}>No upcoming visits. Book one from the Book tab.</Text>
         )}
-      </View>
+      </OwnerNeonCard>
 
-      <View style={commonStyles.card}>
+      <OwnerNeonCard>
         <Text style={commonStyles.cardTitle}>Vaccination alerts</Text>
         {dueSoon.length ? (
           dueSoon.map((v) => (
@@ -162,9 +163,9 @@ export function OwnerDashboardScreen({
         ) : (
           <Text style={commonStyles.emptyState}>No vaccines due in the next 30 days.</Text>
         )}
-      </View>
+      </OwnerNeonCard>
 
-      <View style={commonStyles.card}>
+      <OwnerNeonCard>
         <Text style={commonStyles.cardTitle}>Recent prescriptions</Text>
         {recentRx.length ? (
           recentRx.map((r) => (
@@ -175,9 +176,9 @@ export function OwnerDashboardScreen({
         ) : (
           <Text style={commonStyles.emptyState}>No prescriptions yet.</Text>
         )}
-      </View>
+      </OwnerNeonCard>
 
-      <View style={commonStyles.card}>
+      <OwnerNeonCard>
         <Text style={commonStyles.cardTitle}>Medical files</Text>
         {recentFiles.length ? (
           recentFiles.map((f) => (
@@ -190,7 +191,7 @@ export function OwnerDashboardScreen({
         ) : (
           <Text style={commonStyles.emptyState}>No medical files yet.</Text>
         )}
-      </View>
+      </OwnerNeonCard>
     </ScrollView>
   );
 }
@@ -206,8 +207,13 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     alignItems: "center",
     borderWidth: 1,
-    borderColor: theme.outlineVariant,
+    borderColor: `${theme.primary}44`,
     gap: 6,
+    shadowColor: theme.primaryContainer,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 4,
   },
   quickLabel: { fontWeight: "800", fontSize: 12, color: theme.primary },
   row: { flexDirection: "row", alignItems: "flex-start", gap: 10 },

@@ -34,6 +34,39 @@ Pet owners can browse the **Shop** tab, add items to a cart, enter delivery deta
 
 Checkout uses the same Supabase session as the app; the account must have an **owner** row for the clinic. Delivery cities match the website (Chandigarh / Mohali / Panchkula).
 
+## Build Android APK (device testing)
+
+**Run one command per line.** Do not paste `# comment` text on the same line — npm forwards extra words to EAS and you get `Unexpected arguments`.
+
+```bash
+cd "/Volumes/Uday's Portable/SaaSClinics"
+npm install
+cd apps/mobile
+npm run eas:login
+npm run eas:env
+npm run build:apk
+```
+
+1. `eas:login` — opens browser; sign into Expo (skip if already logged in).
+2. Ensure `.env.local` has `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`, `EXPO_PUBLIC_WEBSITE_URL`.
+3. `eas:env` — uploads those vars to Expo (cloud builds do not read `.env.local` from your Mac). Run again whenever you change env vars.
+4. `build:apk` — starts a cloud build (~10–20 min). When it finishes:
+   - Open [expo.dev](https://expo.dev) → your account → **GreenCoatVets** → **Builds**
+   - Open the latest **preview** Android build → tap **Download** (`.apk`)
+   - Copy the APK to your phone (USB, AirDrop, Google Drive, etc.) and install (allow “Install unknown apps” if prompted).
+
+Re-run steps 3–4 after code or env changes. You do **not** need `eas:configure` again unless you create a new Expo project.
+
+**Splash screen:** On launch you get the native splash (logo on green-tinted background), then an animated **Welcome** screen (logo, app name, paw loader) before login or home.
+
+**Node.js:** Expo 55 wants Node `>=20.19.4` (you have `20.16.0`). Warnings are OK for now; upgrade with `nvm install 22 && nvm use 22` when you can.
+
+**Google sign-in:** Set `EXPO_PUBLIC_WEBSITE_URL=https://greencoatvets.com`. Deploy the website route `/auth/mobile-callback` (bounces OAuth back into the app). In Supabase → Authentication → URL Configuration → Redirect URLs, add:
+- `https://greencoatvets.com/auth/mobile-callback`
+- `greencoatvets://auth/callback`
+
+**Local USB build:** Needs Android Studio + SDK (`npx expo run:android`).
+
 ## Auth session storage (Supabase)
 
 We **do not** use `@react-native-async-storage/async-storage` for Supabase auth. It often breaks in **Expo Go** (`Native module is null` / v3 “legacy storage” errors, or stale Metro caches).

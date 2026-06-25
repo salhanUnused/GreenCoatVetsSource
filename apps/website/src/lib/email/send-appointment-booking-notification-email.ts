@@ -3,6 +3,19 @@ import { getPlatformBranding } from "@/lib/platform-branding";
 import { createHostingerTransport, getHostingerFromAddress, resolveClinicNotificationRecipients } from "./hostinger-mail";
 import { renderBrandedEmail, type EmailCta } from "./render-branded-email";
 
+/** Hard cap so a stuck SMTP connection can never hang the booking request (and crash the page on serverless timeout). */
+const MAIL_SEND_TIMEOUT_MS = 7000;
+
+type Transport = NonNullable<ReturnType<typeof createHostingerTransport>>;
+type MailOptions = Parameters<Transport["sendMail"]>[0];
+
+async function sendMailWithTimeout(transporter: Transport, options: MailOptions): Promise<void> {
+  await Promise.race([
+    transporter.sendMail(options),
+    new Promise((_, reject) => setTimeout(() => reject(new Error("mail_send_timeout")), MAIL_SEND_TIMEOUT_MS)),
+  ]);
+}
+
 export async function sendAppointmentBookingNotificationEmail(params: {
   clinicId: string;
   clinicName: string;
@@ -79,17 +92,19 @@ export async function sendAppointmentBookingNotificationEmail(params: {
         ]
       : undefined;
 
-    for (const recipient of recipients) {
-      await transporter.sendMail({
-        from,
-        to: recipient,
-        replyTo: params.ownerEmail?.trim() || undefined,
-        subject: `[${params.clinicName}] New appointment: ${params.petName} · ${when}`,
-        text: staffMail.text,
-        html: staffMail.html,
-        attachments: staffAttachments,
-      });
-    }
+    await Promise.allSettled(
+      recipients.map((recipient) =>
+        sendMailWithTimeout(transporter, {
+          from,
+          to: recipient,
+          replyTo: params.ownerEmail?.trim() || undefined,
+          subject: `[${params.clinicName}] New appointment: ${params.petName} · ${when}`,
+          text: staffMail.text,
+          html: staffMail.html,
+          attachments: staffAttachments,
+        }),
+      ),
+    );
   }
 
   const ownerEmail = params.ownerEmail?.trim().toLowerCase();
@@ -116,13 +131,15 @@ export async function sendAppointmentBookingNotificationEmail(params: {
       footer: `${brandName} appointment confirmation`,
     });
 
-    await transporter.sendMail({
-      from,
-      to: ownerEmail,
-      subject: `${params.clinicName} appointment confirmed for ${params.petName}`,
-      text: ownerMail.text,
-      html: ownerMail.html,
-    });
+    await Promise.allSettled([
+      sendMailWithTimeout(transporter, {
+        from,
+        to: ownerEmail,
+        subject: `${params.clinicName} appointment confirmed for ${params.petName}`,
+        text: ownerMail.text,
+        html: ownerMail.html,
+      }),
+    ]);
   }
 
   return { sent: true };

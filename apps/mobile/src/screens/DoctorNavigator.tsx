@@ -17,6 +17,7 @@ export function DoctorNavigator({
   onUploadVisitImage,
   onUploadDocument,
   onStatusChange,
+  onGeneratePdf,
   notifications,
   medicineNames,
   refreshing,
@@ -31,6 +32,7 @@ export function DoctorNavigator({
   onUploadVisitImage: (appointmentId: string, uri: string, mimeType?: string, base64?: string | null) => Promise<void>;
   onUploadDocument: (appointmentId: string) => Promise<void>;
   onStatusChange: (appointmentId: string, status: string) => Promise<void>;
+  onGeneratePdf?: (appointmentId: string) => Promise<void>;
   notifications: DoctorNotification[];
   medicineNames: string[];
   refreshing: boolean;
@@ -54,6 +56,7 @@ export function DoctorNavigator({
             onQueueDateChange={onQueueDateChange}
             onStatusChange={onStatusChange}
             onUploadDocument={onUploadDocument}
+            onGeneratePdf={onGeneratePdf}
             notifications={notifications}
             refreshing={refreshing}
             onRefresh={onRefresh}

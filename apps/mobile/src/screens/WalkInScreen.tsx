@@ -16,6 +16,7 @@ export function WalkInScreen({
   onWalkIn: (input: {
     ownerName: string;
     phone: string;
+    email: string;
     petName: string;
     species: string;
     branchId: string;
@@ -25,6 +26,7 @@ export function WalkInScreen({
 }) {
   const [ownerName, setOwnerName] = useState("");
   const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
   const [petName, setPetName] = useState("");
   const [species, setSpecies] = useState("canine");
   const [branchId, setBranchId] = useState(branches[0]?.id ?? "");
@@ -48,12 +50,14 @@ export function WalkInScreen({
       await onWalkIn({
         ownerName: ownerName.trim(),
         phone: phone.trim(),
+        email: email.trim(),
         petName: petName.trim(),
         species,
         branchId,
       });
       setOwnerName("");
       setPhone("");
+      setEmail("");
       setPetName("");
       setSpecies("canine");
     } finally {
@@ -96,6 +100,20 @@ export function WalkInScreen({
           placeholderTextColor={theme.outline}
           keyboardType="phone-pad"
         />
+
+        <Text style={[commonStyles.sectionLabel, { marginTop: 12 }]}>Email</Text>
+        <TextInput
+          style={commonStyles.input}
+          value={email}
+          onChangeText={setEmail}
+          placeholder="owner@email.com (for prescriptions & reports)"
+          placeholderTextColor={theme.outline}
+          keyboardType="email-address"
+          autoCapitalize="none"
+        />
+        <Text style={[commonStyles.muted, { marginTop: 4, fontSize: 11 }]}>
+          Used to share prescriptions and visit reports with the owner.
+        </Text>
 
         <Text style={[commonStyles.sectionLabel, { marginTop: 12 }]}>Pet name</Text>
         <TextInput

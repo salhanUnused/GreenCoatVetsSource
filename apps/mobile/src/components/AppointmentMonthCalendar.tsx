@@ -12,6 +12,14 @@ function sameDay(a: Date, b: Date) {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
 
+/** Local-time YYYY-MM-DD key (avoids UTC offset shifting the day). */
+export function localDayKey(d: Date) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 export function AppointmentMonthCalendar({
   month,
   onMonthChange,
@@ -61,7 +69,7 @@ export function AppointmentMonthCalendar({
       <View style={styles.grid}>
         {cells.map((day, idx) => {
           if (!day) return <View key={`empty-${idx}`} style={styles.cell} />;
-          const key = day.toISOString().slice(0, 10);
+          const key = localDayKey(day);
           const count = countsByDay[key] ?? 0;
           const selected = sameDay(day, selectedDay);
           const today = sameDay(day, new Date());

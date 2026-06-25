@@ -128,6 +128,18 @@ export default async function WalkInGuestPage() {
             />
           </label>
           <label className="flex flex-col gap-0.5">
+            <span className="font-semibold text-slate-800">Email</span>
+            <input
+              name="email"
+              type="email"
+              className="rounded border border-slate-200 bg-white px-2 py-1.5"
+              placeholder="owner@email.com (for prescriptions & reports)"
+              inputMode="email"
+              autoComplete="email"
+            />
+            <span className="text-[10px] text-slate-500">Used to share prescriptions and visit reports with the owner.</span>
+          </label>
+          <label className="flex flex-col gap-0.5">
             <span className="font-semibold text-slate-800">Patient name *</span>
             <input name="pet_name" required className="rounded border border-slate-200 bg-white px-2 py-1.5" placeholder="Pet name" />
           </label>

@@ -78,6 +78,7 @@ import { getPetOwnerProfileStatus, syncWebsiteAccountForMobile } from "./src/lib
 import { notifyAppointmentBookingEmails } from "./src/lib/website-api";
 import { CompleteProfileScreen } from "./src/screens/CompleteProfileScreen";
 import { WalkInScreen } from "./src/screens/WalkInScreen";
+import { generateAppointmentVisitPdf } from "./src/lib/visitReportPdf";
 
 const Tab = createBottomTabNavigator();
 const MOBILE_CONSENT_KEY = "saasclinics_mobile_data_consent_v1";
@@ -1257,6 +1258,30 @@ function MobileHome({ onSignOut, userEmail }: { onSignOut: () => void; userEmail
     return created?.id ?? null;
   }
 
+  async function onGenerateVisitPdf(appointmentId: string) {
+    if (!membership?.clinic_id) return;
+    setActionMessage("Generating report PDF…");
+    const result = await generateAppointmentVisitPdf(membership.clinic_id, appointmentId);
+    if (result.status === "ok") {
+      setActionMessage("Report PDF generated.");
+      if (result.url) {
+        Alert.alert("Report ready", "A visit report PDF was generated and saved for the owner.", [
+          { text: "Close", style: "cancel" },
+          { text: "Open PDF", onPress: () => void Linking.openURL(result.url as string) },
+        ]);
+      } else {
+        Alert.alert("Report ready", "A visit report PDF was generated and saved for the owner.");
+      }
+      await loadData();
+    } else if (result.status === "no_data") {
+      Alert.alert("Nothing to export yet", "Add symptoms, diagnosis, treatment plan, or a prescription in the consult screen first.");
+    } else if (result.status === "no_visit") {
+      Alert.alert("No visit data", "Open this appointment in the consult screen and save details before generating a report.");
+    } else {
+      Alert.alert("PDF failed", result.message);
+    }
+  }
+
   async function onUploadDocument(appointmentId: string) {
     if (!membership?.clinic_id) return;
     const picked = await DocumentPicker.getDocumentAsync({ multiple: false, copyToCacheDirectory: true });
@@ -1900,6 +1925,7 @@ function MobileHome({ onSignOut, userEmail }: { onSignOut: () => void; userEmail
   async function onWalkIn(input: {
     ownerName: string;
     phone: string;
+    email: string;
     petName: string;
     species: string;
     branchId: string;
@@ -1925,6 +1951,7 @@ function MobileHome({ onSignOut, userEmail }: { onSignOut: () => void; userEmail
         last_name: lastName,
         full_name: fullName,
         phone: input.phone,
+        email: input.email ? input.email.trim().toLowerCase() : null,
         contact_type: "customer",
         contact_notes: "Walk-in (mobile front desk) — no portal account yet.",
       })
@@ -1997,14 +2024,11 @@ function MobileHome({ onSignOut, userEmail }: { onSignOut: () => void; userEmail
             accessibilityRole="button"
             accessibilityLabel="Open profile menu"
           >
-            <LinearGradient
-              colors={[`${theme.primary}22`, `${theme.primaryContainer}44`]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.profileTriggerInner}
-            >
+            {platformBranding?.logo_url ? (
+              <Image source={{ uri: platformBranding.logo_url }} style={styles.profileTriggerImage} resizeMode="cover" />
+            ) : (
               <MaterialIcons name="person" size={22} color={theme.primary} />
-            </LinearGradient>
+            )}
           </Pressable>
         </View>
         {actionMessage ? (
@@ -2087,13 +2111,13 @@ function MobileHome({ onSignOut, userEmail }: { onSignOut: () => void; userEmail
               tabBarActiveTintColor: theme.primary,
               tabBarInactiveTintColor: theme.onSurfaceVariant,
               tabBarButton: (props) => <VetCareTabButton {...props} />,
+              tabBarShowLabel: false,
               tabBarStyle: {
                 backgroundColor: "transparent",
                 borderTopWidth: 0,
                 elevation: 0,
                 shadowOpacity: 0,
               },
-              tabBarLabelStyle: { fontSize: 9, fontWeight: "800", letterSpacing: 0.8, textTransform: "uppercase" },
               tabBarIconStyle: { marginBottom: 0 },
             }}
           >
@@ -2248,6 +2272,7 @@ function MobileHome({ onSignOut, userEmail }: { onSignOut: () => void; userEmail
                         onUploadVisitImage={onUploadVisitImage}
                         onUploadDocument={onUploadDocument}
                         onStatusChange={onStatusChange}
+                        onGeneratePdf={onGenerateVisitPdf}
                         notifications={doctorNotifications}
                         medicineNames={doctorMedicineNames}
                         refreshing={refreshing}
@@ -2269,6 +2294,7 @@ function MobileHome({ onSignOut, userEmail }: { onSignOut: () => void; userEmail
                         doctorStaffId={doctorStaffId}
                         onStatusChange={onStatusChange}
                         onUploadDocument={onUploadDocument}
+                        onGeneratePdf={onGenerateVisitPdf}
                         refreshing={refreshing}
                         onRefresh={refreshData}
                       />
@@ -2355,6 +2381,7 @@ function MobileHome({ onSignOut, userEmail }: { onSignOut: () => void; userEmail
                         onUploadVisitImage={onUploadVisitImage}
                         onUploadDocument={onUploadDocument}
                         onStatusChange={onStatusChange}
+                        onGeneratePdf={onGenerateVisitPdf}
                         notifications={doctorNotifications}
                         medicineNames={doctorMedicineNames}
                         refreshing={refreshing}
@@ -2376,6 +2403,7 @@ function MobileHome({ onSignOut, userEmail }: { onSignOut: () => void; userEmail
                         doctorStaffId={doctorStaffId}
                         onStatusChange={onStatusChange}
                         onUploadDocument={onUploadDocument}
+                        onGeneratePdf={onGenerateVisitPdf}
                         refreshing={refreshing}
                         onRefresh={refreshData}
                       />
@@ -2553,6 +2581,7 @@ function MobileHome({ onSignOut, userEmail }: { onSignOut: () => void; userEmail
                         doctorStaffId={doctorStaffId}
                         onStatusChange={onStatusChange}
                         onUploadDocument={onUploadDocument}
+                        onGeneratePdf={onGenerateVisitPdf}
                         refreshing={refreshing}
                         onRefresh={refreshData}
                       />
@@ -2636,6 +2665,7 @@ function MobileHome({ onSignOut, userEmail }: { onSignOut: () => void; userEmail
                         onUploadVisitImage={onUploadVisitImage}
                         onUploadDocument={onUploadDocument}
                         onStatusChange={onStatusChange}
+                        onGeneratePdf={onGenerateVisitPdf}
                         notifications={doctorNotifications}
                         medicineNames={doctorMedicineNames}
                         refreshing={refreshing}
@@ -2820,15 +2850,22 @@ const styles = StyleSheet.create({
     color: theme.primary,
     letterSpacing: -0.3,
   },
-  profileTrigger: { borderRadius: 22, overflow: "hidden", ...shadows.card },
-  profileTriggerInner: {
+  profileTrigger: {
     width: 44,
     height: 44,
     borderRadius: 22,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 1,
-    borderColor: `${theme.outlineVariant}88`,
+    backgroundColor: theme.surfaceBright,
+    borderWidth: 2,
+    borderColor: theme.primary,
+    overflow: "hidden",
+    ...shadows.card,
+  },
+  profileTriggerImage: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
   },
   profileModalRoot: { flex: 1 },
   profileModalBackdrop: {

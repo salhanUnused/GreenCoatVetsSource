@@ -42,6 +42,7 @@ export function DoctorQueueScreen({
   onQueueDateChange,
   onStatusChange,
   onUploadDocument,
+  onGeneratePdf,
   notifications,
   refreshing,
   onRefresh,
@@ -51,6 +52,7 @@ export function DoctorQueueScreen({
   onQueueDateChange: (date: Date) => void;
   onStatusChange: (appointmentId: string, status: string) => Promise<void>;
   onUploadDocument: (appointmentId: string) => Promise<void>;
+  onGeneratePdf?: (appointmentId: string) => Promise<void>;
   notifications: DoctorNotification[];
   refreshing: boolean;
   onRefresh: () => void;
@@ -59,6 +61,7 @@ export function DoctorQueueScreen({
   const [filter, setFilter] = useState<FilterKey>("all");
   const [query, setQuery] = useState("");
   const [statusPickerFor, setStatusPickerFor] = useState<Appointment | null>(null);
+  const [pdfBusyFor, setPdfBusyFor] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -209,6 +212,22 @@ export function DoctorQueueScreen({
                 <Pressable style={commonStyles.btnOutline} onPress={() => void onUploadDocument(appointment.id)}>
                   <Text style={commonStyles.btnOutlineText}>Upload</Text>
                 </Pressable>
+                {onGeneratePdf ? (
+                  <Pressable
+                    style={[commonStyles.btnOutline, pdfBusyFor === appointment.id && { opacity: 0.5 }]}
+                    disabled={pdfBusyFor === appointment.id}
+                    onPress={async () => {
+                      setPdfBusyFor(appointment.id);
+                      try {
+                        await onGeneratePdf(appointment.id);
+                      } finally {
+                        setPdfBusyFor(null);
+                      }
+                    }}
+                  >
+                    <Text style={commonStyles.btnOutlineText}>{pdfBusyFor === appointment.id ? "PDF…" : "PDF"}</Text>
+                  </Pressable>
+                ) : null}
                 {appointment.status !== "cancelled" && appointment.status !== "completed" ? (
                   <>
                     <Pressable style={commonStyles.btnOutline} onPress={() => void onStatusChange(appointment.id, "cancelled")}>

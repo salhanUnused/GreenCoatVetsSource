@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
-import { AppointmentMonthCalendar } from "../../components/AppointmentMonthCalendar";
+import { AppointmentMonthCalendar, localDayKey } from "../../components/AppointmentMonthCalendar";
 import { AppointmentStatusPicker } from "../../components/AppointmentStatusPicker";
 import { normalizeAppointment } from "../../lib/normalizeAppointment";
 import { supabase } from "../../lib/supabase";
@@ -28,6 +28,7 @@ export function StaffAppointmentsCalendarScreen({
   doctorStaffId,
   onStatusChange,
   onUploadDocument,
+  onGeneratePdf,
   refreshing,
   onRefresh,
 }: {
@@ -35,9 +36,11 @@ export function StaffAppointmentsCalendarScreen({
   doctorStaffId?: string | null;
   onStatusChange: (appointmentId: string, status: string) => Promise<void>;
   onUploadDocument: (appointmentId: string) => Promise<void>;
+  onGeneratePdf?: (appointmentId: string) => Promise<void>;
   refreshing: boolean;
   onRefresh: () => void;
 }) {
+  const [pdfBusyFor, setPdfBusyFor] = useState<string | null>(null);
   const [month, setMonth] = useState(() => {
     const d = new Date();
     return new Date(d.getFullYear(), d.getMonth(), 1);
@@ -84,7 +87,7 @@ export function StaffAppointmentsCalendarScreen({
   const countsByDay = useMemo(() => {
     const counts: Record<string, number> = {};
     for (const a of appointments) {
-      const key = a.starts_at.slice(0, 10);
+      const key = localDayKey(new Date(a.starts_at));
       counts[key] = (counts[key] ?? 0) + 1;
     }
     return counts;
@@ -142,9 +145,27 @@ export function StaffAppointmentsCalendarScreen({
                   <MaterialIcons name="expand-more" size={16} color={theme.primary} />
                 </Pressable>
               </View>
-              <Pressable style={styles.attachBtn} onPress={() => void onUploadDocument(a.id)}>
-                <MaterialIcons name="attach-file" size={22} color={theme.primary} />
-              </Pressable>
+              <View style={styles.actionCol}>
+                <Pressable style={styles.attachBtn} onPress={() => void onUploadDocument(a.id)}>
+                  <MaterialIcons name="attach-file" size={22} color={theme.primary} />
+                </Pressable>
+                {onGeneratePdf ? (
+                  <Pressable
+                    style={[styles.attachBtn, pdfBusyFor === a.id && { opacity: 0.5 }]}
+                    disabled={pdfBusyFor === a.id}
+                    onPress={async () => {
+                      setPdfBusyFor(a.id);
+                      try {
+                        await onGeneratePdf(a.id);
+                      } finally {
+                        setPdfBusyFor(null);
+                      }
+                    }}
+                  >
+                    <MaterialIcons name="picture-as-pdf" size={22} color={theme.primary} />
+                  </Pressable>
+                ) : null}
+              </View>
             </View>
           ))
         ) : (
@@ -191,10 +212,10 @@ const styles = StyleSheet.create({
     backgroundColor: `${theme.primary}14`,
   },
   statusText: { fontSize: 12, fontWeight: "700", color: theme.primary, textTransform: "capitalize" },
+  actionCol: { marginLeft: 8, gap: 8 },
   attachBtn: {
     padding: 10,
     borderRadius: 12,
     backgroundColor: theme.surfaceContainerHigh,
-    marginLeft: 8,
   },
 });

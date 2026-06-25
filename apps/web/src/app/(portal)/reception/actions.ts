@@ -36,6 +36,7 @@ export async function createWalkInGuestPatient(formData: FormData) {
 
   const ownerRaw = String(formData.get("owner_name") ?? "").trim();
   const phone = String(formData.get("phone") ?? "").trim();
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const petName = String(formData.get("pet_name") ?? "").trim();
   const species = normalizeLegacySpeciesToCanonical(String(formData.get("species") ?? "").trim() || "unknown");
   const breed = String(formData.get("breed") ?? "").trim();
@@ -70,6 +71,7 @@ export async function createWalkInGuestPatient(formData: FormData) {
       last_name: last,
       full_name: full,
       phone,
+      email: email || null,
       contact_type: "customer",
       contact_notes: notes ? `Walk-in (desk). ${notes}` : "Walk-in (desk) — no portal account yet.",
     })

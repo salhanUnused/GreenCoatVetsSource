@@ -93,12 +93,12 @@ export function WelcomeScreen({
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "transparent" },
-  content: { flex: 1, justifyContent: "center", paddingHorizontal: 24 },
-  kicker: { fontSize: 11, fontWeight: "800", letterSpacing: 1.5, color: theme.onSurfaceVariant },
+  content: { flex: 1, justifyContent: "center", alignItems: "center", paddingHorizontal: 24 },
+  kicker: { fontSize: 11, fontWeight: "800", letterSpacing: 1.5, color: theme.onSurfaceVariant, textAlign: "center" },
   logo: { width: 72, height: 72, marginTop: 12, marginBottom: 4, alignSelf: "center" },
   title: { marginTop: 8, fontSize: 34, fontWeight: "900", color: theme.primary, letterSpacing: -0.6, textAlign: "center" },
-  subtitle: { marginTop: 10, fontSize: 16, lineHeight: 24, color: theme.onSurfaceVariant, maxWidth: 340 },
-  ctaWrap: { marginTop: 28, borderRadius: 8, overflow: "hidden" },
+  subtitle: { marginTop: 10, fontSize: 16, lineHeight: 24, color: theme.onSurfaceVariant, maxWidth: 340, textAlign: "center" },
+  ctaWrap: { marginTop: 28, borderRadius: 8, overflow: "hidden", alignSelf: "stretch" },
   cta: {
     flexDirection: "row",
     alignItems: "center",
@@ -108,7 +108,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   ctaText: { fontSize: 16, fontWeight: "800", color: theme.onPrimary },
-  foot: { marginTop: 14, fontSize: 12, color: theme.onSurfaceVariant },
+  foot: { marginTop: 14, fontSize: 12, color: theme.onSurfaceVariant, textAlign: "center" },
   modalRoot: { flex: 1, justifyContent: "center", paddingHorizontal: 22 },
   backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(10,16,14,0.5)" },
   card: {

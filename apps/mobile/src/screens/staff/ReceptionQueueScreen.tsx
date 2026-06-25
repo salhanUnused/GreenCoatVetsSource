@@ -31,6 +31,7 @@ export function ReceptionQueueScreen({
   onWalkIn: (input: {
     ownerName: string;
     phone: string;
+    email: string;
     petName: string;
     species: string;
     branchId: string;
@@ -49,6 +50,7 @@ export function ReceptionQueueScreen({
   const [walkOpen, setWalkOpen] = useState(false);
   const [ownerName, setOwnerName] = useState("");
   const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
   const [petName, setPetName] = useState("");
   const [species, setSpecies] = useState("canine");
   const [branchId, setBranchId] = useState(branches[0]?.id ?? "");
@@ -171,6 +173,16 @@ export function ReceptionQueueScreen({
             <TextInput style={commonStyles.input} value={ownerName} onChangeText={setOwnerName} placeholder="Full name" placeholderTextColor={theme.outline} />
             <Text style={[commonStyles.sectionLabel, { marginTop: 10 }]}>Phone</Text>
             <TextInput style={commonStyles.input} value={phone} onChangeText={setPhone} placeholder="+91…" keyboardType="phone-pad" placeholderTextColor={theme.outline} />
+            <Text style={[commonStyles.sectionLabel, { marginTop: 10 }]}>Email</Text>
+            <TextInput
+              style={commonStyles.input}
+              value={email}
+              onChangeText={setEmail}
+              placeholder="owner@email.com (for prescriptions & reports)"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              placeholderTextColor={theme.outline}
+            />
             <Text style={[commonStyles.sectionLabel, { marginTop: 10 }]}>Pet</Text>
             <TextInput style={commonStyles.input} value={petName} onChangeText={setPetName} placeholder="Pet name" placeholderTextColor={theme.outline} />
             <Text style={[commonStyles.sectionLabel, { marginTop: 10 }]}>Species</Text>
@@ -193,6 +205,7 @@ export function ReceptionQueueScreen({
                   void onWalkIn({
                     ownerName: ownerName.trim(),
                     phone: phone.trim(),
+                    email: email.trim(),
                     petName: petName.trim(),
                     species: species.trim() || "unknown",
                     branchId: branchId || branches[0]?.id || "",
@@ -200,6 +213,7 @@ export function ReceptionQueueScreen({
                     setWalkOpen(false);
                     setOwnerName("");
                     setPhone("");
+                    setEmail("");
                     setPetName("");
                     setSpecies("canine");
                   })

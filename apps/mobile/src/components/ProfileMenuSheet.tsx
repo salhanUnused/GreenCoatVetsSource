@@ -1,14 +1,17 @@
-import { Image, Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import type { AppBranding } from "../lib/app-branding";
 import { theme, shadows } from "../theme/theme";
+
+function formatRole(role: string) {
+  return role.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
 export function ProfileMenuSheet({
   visible,
   topInset,
   branding,
   roleLabel,
-  clinicMeta,
   userEmail,
   onClose,
   onSignOut,
@@ -17,50 +20,58 @@ export function ProfileMenuSheet({
   topInset: number;
   branding: AppBranding | null;
   roleLabel: string;
-  clinicMeta: string;
   userEmail?: string | null;
   onClose: () => void;
   onSignOut: () => void;
 }) {
+  const productName = branding?.product_name ?? "GreenCoatVets";
+  const role = formatRole(roleLabel || "guest");
+
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
       <View style={styles.root}>
-        <Pressable style={styles.backdrop} onPress={onClose} />
+        <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="Dismiss profile menu" />
 
         <View style={[styles.sheet, { top: topInset + 52 }]}>
-          <View style={styles.accent} />
-
-          <View style={styles.avatarWrap}>
+          <View style={styles.header}>
             <View style={styles.avatarCircle}>
-              {branding?.logo_url ? (
-                <Image source={{ uri: branding.logo_url }} style={styles.avatarImage} resizeMode="cover" />
-              ) : (
-                <MaterialIcons name="person" size={28} color={theme.primary} />
-              )}
+              <MaterialIcons name="person" size={30} color={theme.primary} />
+            </View>
+            <View style={styles.headerText}>
+              <Text style={styles.name} numberOfLines={1}>
+                {productName}
+              </Text>
+              {userEmail ? (
+                <Text style={styles.email} numberOfLines={1}>
+                  {userEmail}
+                </Text>
+              ) : null}
             </View>
           </View>
 
-          <Text style={styles.brand}>{branding?.product_name ?? "GreenCoatVets"}</Text>
-          {userEmail ? (
-            <Text style={styles.email} numberOfLines={1}>
-              {userEmail}
-            </Text>
-          ) : null}
+          <View style={styles.divider} />
 
-          <View style={styles.roleCard}>
-            <Text style={styles.roleKicker}>Signed in as</Text>
-            <Text style={styles.role}>{roleLabel.replace(/_/g, " ")}</Text>
-            <Text style={styles.meta} numberOfLines={1}>
-              {clinicMeta}
-            </Text>
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>Account</Text>
+            <View style={styles.infoRow}>
+              <View style={styles.infoIcon}>
+                <MaterialIcons name="badge" size={18} color={theme.primary} />
+              </View>
+              <View style={styles.infoBody}>
+                <Text style={styles.infoLabel}>Role</Text>
+                <Text style={styles.infoValue}>{role}</Text>
+              </View>
+            </View>
           </View>
 
-          <Pressable style={styles.signOut} onPress={onSignOut}>
+          <View style={styles.divider} />
+
+          <Pressable style={styles.signOut} onPress={onSignOut} accessibilityRole="button" accessibilityLabel="Sign out">
             <MaterialIcons name="logout" size={20} color={theme.onPrimary} />
             <Text style={styles.signOutText}>Sign out</Text>
           </Pressable>
 
-          <Pressable style={styles.closeBtn} onPress={onClose}>
+          <Pressable style={styles.closeBtn} onPress={onClose} accessibilityRole="button">
             <Text style={styles.closeText}>Close</Text>
           </Pressable>
         </View>
@@ -73,92 +84,96 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(8, 20, 16, 0.45)",
+    backgroundColor: "rgba(15, 23, 20, 0.4)",
   },
   sheet: {
     position: "absolute",
     right: 14,
-    width: 300,
-    borderRadius: 16,
+    width: 292,
+    borderRadius: 18,
     backgroundColor: theme.surfaceBright,
-    paddingHorizontal: 18,
-    paddingBottom: 14,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 12,
     borderWidth: 1,
     borderColor: theme.outlineVariant,
-    overflow: "hidden",
     ...shadows.card,
-    shadowOpacity: 0.18,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 12,
+    shadowOpacity: 0.16,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 14,
   },
-  accent: {
-    height: 4,
-    marginHorizontal: -18,
-    marginBottom: 16,
-    backgroundColor: theme.primary,
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
   },
-  avatarWrap: { alignItems: "center", marginBottom: 10 },
   avatarCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: theme.surfaceContainer,
     borderWidth: 2,
     borderColor: theme.primary,
-    overflow: "hidden",
   },
-  avatarImage: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-  },
-  brand: {
-    fontSize: 20,
+  headerText: { flex: 1, minWidth: 0 },
+  name: {
+    fontSize: 17,
     fontWeight: "800",
     color: theme.onSurface,
-    textAlign: "center",
-    letterSpacing: -0.3,
+    letterSpacing: -0.2,
   },
   email: {
-    marginTop: 4,
+    marginTop: 3,
     fontSize: 12,
     color: theme.onSurfaceVariant,
-    textAlign: "center",
     fontWeight: "600",
   },
-  roleCard: {
-    marginTop: 14,
-    borderRadius: 12,
-    padding: 14,
-    backgroundColor: theme.surfaceContainer,
-    borderWidth: 1,
-    borderColor: theme.outlineVariant,
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: theme.outlineVariant,
+    marginVertical: 14,
   },
-  roleKicker: {
-    fontSize: 10,
+  section: { gap: 10 },
+  sectionLabel: {
+    fontSize: 11,
     fontWeight: "800",
     color: theme.outline,
     textTransform: "uppercase",
-    letterSpacing: 1.1,
+    letterSpacing: 1,
   },
-  role: {
-    marginTop: 4,
-    fontSize: 18,
+  infoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: theme.surfaceContainer,
+  },
+  infoIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: theme.surfaceBright,
+  },
+  infoBody: { flex: 1, minWidth: 0 },
+  infoLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: theme.onSurfaceVariant,
+  },
+  infoValue: {
+    marginTop: 2,
+    fontSize: 15,
     fontWeight: "800",
     color: theme.primary,
-    textTransform: "capitalize",
-  },
-  meta: {
-    marginTop: 6,
-    fontSize: 12,
-    color: theme.onSurfaceVariant,
-    fontWeight: "600",
   },
   signOut: {
-    marginTop: 16,
     borderRadius: 12,
     backgroundColor: theme.primary,
     flexDirection: "row",
@@ -168,6 +183,6 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
   },
   signOutText: { color: theme.onPrimary, fontWeight: "800", fontSize: 15 },
-  closeBtn: { marginTop: 10, paddingVertical: 8, alignItems: "center" },
+  closeBtn: { marginTop: 8, paddingVertical: 8, alignItems: "center" },
   closeText: { color: theme.onSurfaceVariant, fontWeight: "700", fontSize: 14 },
 });

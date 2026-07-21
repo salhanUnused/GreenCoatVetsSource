@@ -2024,11 +2024,7 @@ function MobileHome({ onSignOut, userEmail }: { onSignOut: () => void; userEmail
             accessibilityRole="button"
             accessibilityLabel="Open profile menu"
           >
-            {platformBranding?.logo_url ? (
-              <Image source={{ uri: platformBranding.logo_url }} style={styles.profileTriggerImage} resizeMode="cover" />
-            ) : (
-              <MaterialIcons name="person" size={22} color={theme.primary} />
-            )}
+            <MaterialIcons name="person" size={22} color={theme.primary} />
           </Pressable>
         </View>
         {actionMessage ? (
@@ -2043,7 +2039,6 @@ function MobileHome({ onSignOut, userEmail }: { onSignOut: () => void; userEmail
         topInset={insets.top}
         branding={platformBranding}
         roleLabel={membership?.role ?? "guest"}
-        clinicMeta={membership?.clinic_id ? `Clinic ${membership.clinic_id.slice(0, 8)}…` : "Platform"}
         userEmail={userEmail}
         onClose={() => setProfileOpen(false)}
         onSignOut={onSignOut}
@@ -2861,11 +2856,6 @@ const styles = StyleSheet.create({
     borderColor: theme.primary,
     overflow: "hidden",
     ...shadows.card,
-  },
-  profileTriggerImage: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
   },
   profileModalRoot: { flex: 1 },
   profileModalBackdrop: {

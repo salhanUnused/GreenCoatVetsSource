@@ -77,9 +77,6 @@ export function AdminPatientsScreen({
     >
       <View style={commonStyles.card}>
         <Text style={commonStyles.cardTitle}>Patients & clients</Text>
-        <Text style={[commonStyles.muted, { marginBottom: 12 }]}>
-          All registered pet owners for your clinic. Full editing remains on the web dashboard.
-        </Text>
         {loading ? (
           <ActivityIndicator color={theme.primary} />
         ) : rows.length ? (

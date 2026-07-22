@@ -1,10 +1,23 @@
 import { useEffect, useState } from "react";
 import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
 import { MaterialIcons } from "@expo/vector-icons";
 import { PET_SPECIES_BOOKING_OPTIONS } from "@saasclinics/lib";
 import { commonStyles } from "../theme/commonStyles";
 import { theme } from "../theme/theme";
+
+export type WalkInInput = {
+  ownerName: string;
+  phone: string;
+  email: string;
+  petName: string;
+  species: string;
+  breed: string;
+  ageMonths: string;
+  weightKg: string;
+  branchId: string;
+  notes: string;
+  createAppointment: boolean;
+};
 
 export function WalkInScreen({
   branches,
@@ -13,14 +26,7 @@ export function WalkInScreen({
   onRefresh,
 }: {
   branches: Array<{ id: string; name: string }>;
-  onWalkIn: (input: {
-    ownerName: string;
-    phone: string;
-    email: string;
-    petName: string;
-    species: string;
-    branchId: string;
-  }) => Promise<void>;
+  onWalkIn: (input: WalkInInput) => Promise<void>;
   refreshing: boolean;
   onRefresh: () => void;
 }) {
@@ -29,6 +35,11 @@ export function WalkInScreen({
   const [email, setEmail] = useState("");
   const [petName, setPetName] = useState("");
   const [species, setSpecies] = useState("canine");
+  const [breed, setBreed] = useState("");
+  const [ageMonths, setAgeMonths] = useState("");
+  const [weightKg, setWeightKg] = useState("");
+  const [notes, setNotes] = useState("");
+  const [createAppointment, setCreateAppointment] = useState(true);
   const [branchId, setBranchId] = useState(branches[0]?.id ?? "");
   const [saving, setSaving] = useState(false);
 
@@ -36,13 +47,26 @@ export function WalkInScreen({
     if (!branchId && branches[0]?.id) setBranchId(branches[0].id);
   }, [branches, branchId]);
 
+  function resetForm() {
+    setOwnerName("");
+    setPhone("");
+    setEmail("");
+    setPetName("");
+    setSpecies("canine");
+    setBreed("");
+    setAgeMonths("");
+    setWeightKg("");
+    setNotes("");
+    setCreateAppointment(true);
+  }
+
   async function submit() {
-    if (!ownerName.trim() || !phone.trim() || !petName.trim()) {
-      Alert.alert("Missing details", "Owner name, phone, and pet name are required.");
+    if (!phone.trim() || !petName.trim()) {
+      Alert.alert("Missing details", "Phone and pet name are required.");
       return;
     }
-    if (!branchId) {
-      Alert.alert("Branch required", "Select a branch for this walk-in.");
+    if (createAppointment && !branchId) {
+      Alert.alert("Branch required", "Select a branch for the appointment.");
       return;
     }
     setSaving(true);
@@ -53,13 +77,14 @@ export function WalkInScreen({
         email: email.trim(),
         petName: petName.trim(),
         species,
+        breed: breed.trim(),
+        ageMonths: ageMonths.trim(),
+        weightKg: weightKg.trim(),
         branchId,
+        notes: notes.trim(),
+        createAppointment,
       });
-      setOwnerName("");
-      setPhone("");
-      setEmail("");
-      setPetName("");
-      setSpecies("canine");
+      resetForm();
     } finally {
       setSaving(false);
     }
@@ -72,26 +97,24 @@ export function WalkInScreen({
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} colors={[theme.primary]} />
       }
+      keyboardShouldPersistTaps="handled"
     >
       <View style={commonStyles.card}>
         <View style={styles.hero}>
-          <MaterialIcons name="person-add-alt-1" size={32} color={theme.primary} />
-          <Text style={commonStyles.cardTitle}>Walk-in appointment</Text>
+          <MaterialIcons name="person-add-alt-1" size={28} color={theme.primary} />
+          <Text style={commonStyles.cardTitle}>Walk-in guest</Text>
         </View>
-        <Text style={[commonStyles.muted, { marginBottom: 16 }]}>
-          Register a guest at the desk and queue a consultation. No portal account is created for the owner.
-        </Text>
 
         <Text style={commonStyles.sectionLabel}>Owner name</Text>
         <TextInput
           style={commonStyles.input}
           value={ownerName}
           onChangeText={setOwnerName}
-          placeholder="Guest full name"
+          placeholder="First Last (optional)"
           placeholderTextColor={theme.outline}
         />
 
-        <Text style={[commonStyles.sectionLabel, { marginTop: 12 }]}>Phone</Text>
+        <Text style={[commonStyles.sectionLabel, { marginTop: 12 }]}>Phone *</Text>
         <TextInput
           style={commonStyles.input}
           value={phone}
@@ -106,25 +129,22 @@ export function WalkInScreen({
           style={commonStyles.input}
           value={email}
           onChangeText={setEmail}
-          placeholder="owner@email.com (for prescriptions & reports)"
+          placeholder="owner@email.com"
           placeholderTextColor={theme.outline}
           keyboardType="email-address"
           autoCapitalize="none"
         />
-        <Text style={[commonStyles.muted, { marginTop: 4, fontSize: 11 }]}>
-          Used to share prescriptions and visit reports with the owner.
-        </Text>
 
-        <Text style={[commonStyles.sectionLabel, { marginTop: 12 }]}>Pet name</Text>
+        <Text style={[commonStyles.sectionLabel, { marginTop: 12 }]}>Patient name *</Text>
         <TextInput
           style={commonStyles.input}
           value={petName}
           onChangeText={setPetName}
-          placeholder="Patient name"
+          placeholder="Pet name"
           placeholderTextColor={theme.outline}
         />
 
-        <Text style={[commonStyles.sectionLabel, { marginTop: 12 }]}>Species</Text>
+        <Text style={[commonStyles.sectionLabel, { marginTop: 12 }]}>Species *</Text>
         <View style={styles.chipRow}>
           {PET_SPECIES_BOOKING_OPTIONS.map((opt) => (
             <Pressable
@@ -137,7 +157,36 @@ export function WalkInScreen({
           ))}
         </View>
 
-        <Text style={[commonStyles.sectionLabel, { marginTop: 12 }]}>Branch</Text>
+        <Text style={[commonStyles.sectionLabel, { marginTop: 12 }]}>Breed</Text>
+        <TextInput
+          style={commonStyles.input}
+          value={breed}
+          onChangeText={setBreed}
+          placeholder="Breed (optional)"
+          placeholderTextColor={theme.outline}
+        />
+
+        <Text style={[commonStyles.sectionLabel, { marginTop: 12 }]}>Age (months)</Text>
+        <TextInput
+          style={commonStyles.input}
+          value={ageMonths}
+          onChangeText={setAgeMonths}
+          placeholder="e.g. 18"
+          placeholderTextColor={theme.outline}
+          keyboardType="number-pad"
+        />
+
+        <Text style={[commonStyles.sectionLabel, { marginTop: 12 }]}>Weight (kg)</Text>
+        <TextInput
+          style={commonStyles.input}
+          value={weightKg}
+          onChangeText={setWeightKg}
+          placeholder="e.g. 12.5"
+          placeholderTextColor={theme.outline}
+          keyboardType="decimal-pad"
+        />
+
+        <Text style={[commonStyles.sectionLabel, { marginTop: 12 }]}>Primary branch</Text>
         <View style={styles.chipRow}>
           {branches.map((b) => (
             <Pressable
@@ -150,10 +199,31 @@ export function WalkInScreen({
           ))}
         </View>
 
-        <Pressable onPress={() => void submit()} disabled={saving} style={{ marginTop: 20, opacity: saving ? 0.7 : 1 }}>
-          <LinearGradient colors={[theme.gradientStart, theme.gradientEnd]} style={styles.cta}>
-            <Text style={styles.ctaText}>{saving ? "Saving…" : "Create walk-in appointment"}</Text>
-          </LinearGradient>
+        <Pressable style={styles.checkRow} onPress={() => setCreateAppointment((v) => !v)}>
+          <MaterialIcons
+            name={createAppointment ? "check-box" : "check-box-outline-blank"}
+            size={22}
+            color={theme.primary}
+          />
+          <Text style={styles.checkLabel}>Also create a same-day appointment</Text>
+        </Pressable>
+
+        <Text style={[commonStyles.sectionLabel, { marginTop: 12 }]}>Desk notes</Text>
+        <TextInput
+          style={[commonStyles.input, styles.notes]}
+          value={notes}
+          onChangeText={setNotes}
+          placeholder="Optional"
+          placeholderTextColor={theme.outline}
+          multiline
+        />
+
+        <Pressable
+          onPress={() => void submit()}
+          disabled={saving}
+          style={[commonStyles.btnPrimary, { marginTop: 20, opacity: saving ? 0.7 : 1 }]}
+        >
+          <Text style={commonStyles.btnPrimaryText}>{saving ? "Saving…" : "Save walk-in"}</Text>
         </Pressable>
       </View>
     </ScrollView>
@@ -161,7 +231,7 @@ export function WalkInScreen({
 }
 
 const styles = StyleSheet.create({
-  hero: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 8 },
+  hero: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 14 },
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 6 },
   chip: {
     paddingHorizontal: 12,
@@ -174,6 +244,7 @@ const styles = StyleSheet.create({
   chipOn: { borderColor: theme.primary, backgroundColor: `${theme.primary}18` },
   chipText: { fontSize: 12, fontWeight: "600", color: theme.onSurface },
   chipTextOn: { color: theme.primary, fontWeight: "800" },
-  cta: { borderRadius: 12, paddingVertical: 16, alignItems: "center" },
-  ctaText: { color: theme.onPrimary, fontWeight: "800", fontSize: 16 },
+  checkRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 16 },
+  checkLabel: { flex: 1, fontSize: 13, fontWeight: "600", color: theme.onSurface },
+  notes: { minHeight: 72, textAlignVertical: "top" },
 });

@@ -21,6 +21,7 @@ import { PawCircularLoader } from "../components/PawCircularLoader";
 import { loadAppBranding, type AppBranding } from "../lib/app-branding";
 import { mapAuthError } from "../lib/mapAuthError";
 import { ensurePrimaryClinicMembership } from "../lib/ensure-clinic-membership";
+import { forceAssignOnlyClinic } from "../lib/membership";
 import { syncWebsiteAccountForMobile } from "../lib/owner-profile";
 import { signInWithGoogle } from "../lib/google-auth";
 
@@ -50,10 +51,22 @@ export function AuthScreen() {
       data: { user },
     } = await supabase.auth.getUser();
     if (user) {
-      await syncWebsiteAccountForMobile(supabase, user);
-      return;
+      try {
+        await syncWebsiteAccountForMobile(supabase, user);
+      } catch {
+        /* continue to force-assign */
+      }
     }
-    await ensurePrimaryClinicMembership(name, phoneNumber);
+    try {
+      await ensurePrimaryClinicMembership(name, phoneNumber);
+    } catch {
+      /* continue to force-assign */
+    }
+    try {
+      await forceAssignOnlyClinic("pet_owner");
+    } catch {
+      /* loadData will retry */
+    }
   }
 
   async function onGoogleAuth() {

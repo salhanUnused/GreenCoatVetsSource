@@ -25,7 +25,7 @@ type Attachment = {
 export function OwnerDashboardScreen({
   pets,
   appointments,
-  vaccinations,
+  vaccinations: _vaccinations,
   prescriptions,
   attachments,
   visitReports,
@@ -88,17 +88,6 @@ export function OwnerDashboardScreen({
   const nextAppt = futureOrdered[0] ?? recentScheduledPast[0];
   const nextApptIsPast = nextAppt ? startsAtMs(nextAppt.starts_at) < now - CLOCK_SLACK_MS : false;
 
-  function dueOnMs(due: string | null) {
-    if (!due) return NaN;
-    const s = due.includes("T") ? due : `${due}T12:00:00`;
-    return new Date(s).getTime();
-  }
-  const dueSoon = vaccinations.filter((v) => {
-    if (!v.due_on) return false;
-    const t = dueOnMs(v.due_on);
-    if (!Number.isFinite(t)) return false;
-    return t <= now + 30 * 86400000;
-  });
   const recentRx = prescriptions.slice(0, 3);
   const recentFiles = attachments.slice(0, 3);
 
@@ -110,8 +99,7 @@ export function OwnerDashboardScreen({
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} colors={[theme.primary]} />
       }
     >
-      <Text style={styles.headline}>Your dashboard</Text>
-      <Text style={styles.sub}>Convenience and tracking for your pets.</Text>
+      <Text style={styles.headline}>Home</Text>
 
       <View style={styles.quickRow}>
         <Pressable style={styles.quickTile} onPress={onGoBook}>
@@ -148,20 +136,6 @@ export function OwnerDashboardScreen({
           </View>
         ) : (
           <Text style={commonStyles.emptyState}>No upcoming visits. Book one from the Book tab.</Text>
-        )}
-      </OwnerNeonCard>
-
-      <OwnerNeonCard>
-        <Text style={commonStyles.cardTitle}>Vaccination alerts</Text>
-        {dueSoon.length ? (
-          dueSoon.map((v) => (
-            <Text key={v.id} style={styles.alertLine}>
-              {v.pets?.name ? `${v.pets.name}: ` : ""}
-              {v.vaccine_name} — due {v.due_on ?? "—"}
-            </Text>
-          ))
-        ) : (
-          <Text style={commonStyles.emptyState}>No vaccines due in the next 30 days.</Text>
         )}
       </OwnerNeonCard>
 

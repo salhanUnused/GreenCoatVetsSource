@@ -2,6 +2,7 @@ import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
 import { makeRedirectUri } from "expo-auth-session";
 import { ensurePrimaryClinicMembership } from "./ensure-clinic-membership";
+import { forceAssignOnlyClinic } from "./membership";
 import { supabase } from "./supabase";
 
 WebBrowser.maybeCompleteAuthSession();
@@ -157,9 +158,16 @@ export async function signInWithGoogle(): Promise<void> {
 }
 
 export async function linkPrimaryClinicAfterAuth(fullName?: string | null, phone?: string | null) {
-  const clinicId = await ensurePrimaryClinicMembership(fullName, phone);
-  if (!clinicId) {
-    console.warn("ensure_primary_clinic_customer_membership: no clinic resolved");
+  try {
+    const clinicId = await ensurePrimaryClinicMembership(fullName, phone);
+    if (clinicId) return clinicId;
+  } catch (e) {
+    console.warn("ensure_primary_clinic_customer_membership", e instanceof Error ? e.message : e);
   }
-  return clinicId;
+  try {
+    return await forceAssignOnlyClinic("pet_owner");
+  } catch (e) {
+    console.warn("force_assign_only_clinic_membership", e instanceof Error ? e.message : e);
+    return null;
+  }
 }

@@ -1,24 +1,54 @@
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { DoctorStackParamList } from "../navigation/types";
-import { DoctorQueueScreen } from "./DoctorQueueScreen";
+import { StaffAppointmentsCalendarScreen } from "./staff/StaffAppointmentsCalendarScreen";
 import { DoctorConsultScreen } from "./DoctorConsultScreen";
 import { Appointment, DoctorNotification } from "../types/app";
 import { theme } from "../theme/theme";
 
 const Stack = createNativeStackNavigator<DoctorStackParamList>();
 
-export function DoctorNavigator({
-  appointments,
+function CalendarEntry({
   clinicId,
   doctorStaffId,
-  queueDate,
-  onQueueDateChange,
+  onStatusChange,
+  onUploadDocument,
+  onGeneratePdf,
+  refreshing,
+  onRefresh,
+}: {
+  clinicId: string;
+  doctorStaffId: string | null;
+  onStatusChange: (appointmentId: string, status: string) => Promise<void>;
+  onUploadDocument: (appointmentId: string) => Promise<void>;
+  onGeneratePdf?: (appointmentId: string) => Promise<void>;
+  refreshing: boolean;
+  onRefresh: () => void;
+}) {
+  const navigation = useNavigation<NativeStackNavigationProp<DoctorStackParamList>>();
+  return (
+    <StaffAppointmentsCalendarScreen
+      clinicId={clinicId}
+      doctorStaffId={doctorStaffId}
+      onStatusChange={onStatusChange}
+      onUploadDocument={onUploadDocument}
+      onGeneratePdf={onGeneratePdf}
+      onOpenConsult={(appointmentId) => navigation.navigate("Consult", { appointmentId })}
+      refreshing={refreshing}
+      onRefresh={onRefresh}
+    />
+  );
+}
+
+export function DoctorNavigator({
+  clinicId,
+  doctorStaffId,
   ensureVisitForAppointment,
   onUploadVisitImage,
   onUploadDocument,
   onStatusChange,
   onGeneratePdf,
-  notifications,
   medicineNames,
   refreshing,
   onRefresh,
@@ -48,16 +78,14 @@ export function DoctorNavigator({
         contentStyle: { backgroundColor: "transparent" },
       }}
     >
-      <Stack.Screen name="Queue" options={{ title: "Appointments" }}>
+      <Stack.Screen name="Queue" options={{ title: "Calendar", headerShown: false }}>
         {() => (
-          <DoctorQueueScreen
-            appointments={appointments}
-            queueDate={queueDate}
-            onQueueDateChange={onQueueDateChange}
+          <CalendarEntry
+            clinicId={clinicId}
+            doctorStaffId={doctorStaffId}
             onStatusChange={onStatusChange}
             onUploadDocument={onUploadDocument}
             onGeneratePdf={onGeneratePdf}
-            notifications={notifications}
             refreshing={refreshing}
             onRefresh={onRefresh}
           />

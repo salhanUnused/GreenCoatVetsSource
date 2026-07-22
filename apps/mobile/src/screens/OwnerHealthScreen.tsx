@@ -48,9 +48,6 @@ export function OwnerHealthScreen({
     >
       <OwnerNeonCard>
         <Text style={commonStyles.cardTitle}>Prescriptions</Text>
-        <Text style={[commonStyles.muted, { marginBottom: 12 }]}>
-          Medicines recorded at the clinic for your pets. Lines match what staff saved on the visit.
-        </Text>
         {prescriptions.map((prescription, i) => {
           const lines = prescription.prescription_items ?? [];
           const hasPdf = Boolean(prescription.pdf_url?.trim());
@@ -113,10 +110,7 @@ export function OwnerHealthScreen({
       </OwnerNeonCard>
 
       <OwnerNeonCard>
-        <Text style={commonStyles.cardTitle}>Visit reports (PDF)</Text>
-        <Text style={[commonStyles.muted, { marginBottom: 12 }]}>
-          Summary PDFs generated after visits — same as in your clinic portal.
-        </Text>
+        <Text style={commonStyles.cardTitle}>Visit reports</Text>
         {visitReports.map((vr, i) => (
           <View style={[styles.fileRow, i === visitReports.length - 1 && styles.fileRowLast]} key={vr.id}>
             <View style={{ flex: 1 }}>
@@ -138,9 +132,6 @@ export function OwnerHealthScreen({
 
       <OwnerNeonCard>
         <Text style={commonStyles.cardTitle}>Files from visits</Text>
-        <Text style={[commonStyles.muted, { marginBottom: 12 }]}>
-          Documents the clinic attached to visits (lab results, images, etc.).
-        </Text>
         {attachments.map((attachment, i) => (
           <View style={[styles.fileRow, i === attachments.length - 1 && styles.fileRowLast]} key={attachment.id}>
             <View style={{ flex: 1 }}>

@@ -289,11 +289,6 @@ export function OwnerBookingScreen({
     <ScrollView style={commonStyles.screen} contentContainerStyle={[commonStyles.scrollContent, { paddingBottom: 40 }]}>
       <OwnerNeonCard>
         <Text style={commonStyles.cardTitle}>Book appointment</Text>
-        <Text style={[commonStyles.muted, { marginBottom: 14 }]}>
-          {hasBookingDoctors
-            ? "Pick a doctor and an open time slot, or leave the doctor blank for clinic assignment."
-            : "The clinic will assign a clinician for your visit."}
-        </Text>
 
         <View style={styles.typeRow}>
           {APPOINTMENT_TYPES.map(([value, label]) => (

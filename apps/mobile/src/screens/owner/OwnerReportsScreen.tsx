@@ -43,11 +43,6 @@ export function OwnerReportsScreen({
     >
       <OwnerNeonCard>
         <Text style={commonStyles.cardTitle}>Visit reports</Text>
-        <Text style={[commonStyles.muted, { marginBottom: 14 }]}>
-          {reportsEnabled
-            ? "Download PDF summaries your clinic saved or emailed to you after visits."
-            : "Visit-report downloads are currently disabled by your clinic admin."}
-        </Text>
 
         {reportsEnabled && readyReports.length > 1 ? (
           <Pressable

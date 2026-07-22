@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
-import { Alert, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { useState } from "react";
+import { Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
+import { WalkInScreen, type WalkInInput } from "../WalkInScreen";
 import { Appointment, StaffDoctorOption } from "../../types/app";
 import { commonStyles } from "../../theme/commonStyles";
 import { theme } from "../../theme/theme";
@@ -28,14 +29,7 @@ export function ReceptionQueueScreen({
   onUploadDocument: (appointmentId: string) => Promise<void>;
   onOpenPrescriptionForAppointment: (appointmentId: string) => Promise<void>;
   onAssignDoctor: (appointmentId: string, doctorStaffId: string | null) => Promise<void>;
-  onWalkIn: (input: {
-    ownerName: string;
-    phone: string;
-    email: string;
-    petName: string;
-    species: string;
-    branchId: string;
-  }) => Promise<void>;
+  onWalkIn: (input: WalkInInput) => Promise<void>;
   refreshing: boolean;
   onRefresh: () => void;
   pendingTimeChangeRequests?: Array<{
@@ -48,16 +42,6 @@ export function ReceptionQueueScreen({
   onApproveTimeChangeRequest?: (requestId: string) => Promise<void>;
 }) {
   const [walkOpen, setWalkOpen] = useState(false);
-  const [ownerName, setOwnerName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [email, setEmail] = useState("");
-  const [petName, setPetName] = useState("");
-  const [species, setSpecies] = useState("canine");
-  const [branchId, setBranchId] = useState(branches[0]?.id ?? "");
-
-  useEffect(() => {
-    if (!branchId && branches[0]?.id) setBranchId(branches[0].id);
-  }, [branches, branchId]);
 
   const inPersonToday = appointments.filter((a) => (a.appointment_type ?? "") !== "online_consult");
 
@@ -71,9 +55,6 @@ export function ReceptionQueueScreen({
     >
       <View style={commonStyles.card}>
         <Text style={commonStyles.cardTitle}>Reception</Text>
-        <Text style={[commonStyles.muted, { marginBottom: 12 }]}>
-          Walk-ins, check-ins, and today&apos;s in-clinic queue. Use the Walk-in QR tab for guest self-booking.
-        </Text>
         <View style={styles.heroRow}>
           <Pressable style={styles.heroBtn} onPress={() => setWalkOpen(true)}>
             <MaterialIcons name="person-add-alt-1" size={28} color={theme.onPrimary} />
@@ -85,9 +66,6 @@ export function ReceptionQueueScreen({
       {pendingTimeChangeRequests.length ? (
         <View style={[commonStyles.card, { borderColor: `${theme.primary}44`, borderWidth: 1 }]}>
           <Text style={commonStyles.cardTitle}>Time change requests</Text>
-          <Text style={[commonStyles.muted, { marginBottom: 10 }]}>
-            Pet owners asked to move these appointments — approve to apply the new time.
-          </Text>
           {pendingTimeChangeRequests.map((req) => (
             <View key={req.id} style={styles.requestRow}>
               <View style={{ flex: 1 }}>
@@ -167,61 +145,21 @@ export function ReceptionQueueScreen({
       <Modal visible={walkOpen} animationType="slide" transparent>
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Walk-in guest</Text>
-            <Text style={[commonStyles.muted, { marginBottom: 12 }]}>Minimal fields — full profile can be completed later.</Text>
-            <Text style={commonStyles.sectionLabel}>Owner</Text>
-            <TextInput style={commonStyles.input} value={ownerName} onChangeText={setOwnerName} placeholder="Full name" placeholderTextColor={theme.outline} />
-            <Text style={[commonStyles.sectionLabel, { marginTop: 10 }]}>Phone</Text>
-            <TextInput style={commonStyles.input} value={phone} onChangeText={setPhone} placeholder="+91…" keyboardType="phone-pad" placeholderTextColor={theme.outline} />
-            <Text style={[commonStyles.sectionLabel, { marginTop: 10 }]}>Email</Text>
-            <TextInput
-              style={commonStyles.input}
-              value={email}
-              onChangeText={setEmail}
-              placeholder="owner@email.com (for prescriptions & reports)"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              placeholderTextColor={theme.outline}
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Walk-in guest</Text>
+              <Pressable onPress={() => setWalkOpen(false)} hitSlop={12}>
+                <MaterialIcons name="close" size={24} color={theme.onSurfaceVariant} />
+              </Pressable>
+            </View>
+            <WalkInScreen
+              branches={branches}
+              onWalkIn={async (input) => {
+                await onWalkIn(input);
+                setWalkOpen(false);
+              }}
+              refreshing={false}
+              onRefresh={() => undefined}
             />
-            <Text style={[commonStyles.sectionLabel, { marginTop: 10 }]}>Pet</Text>
-            <TextInput style={commonStyles.input} value={petName} onChangeText={setPetName} placeholder="Pet name" placeholderTextColor={theme.outline} />
-            <Text style={[commonStyles.sectionLabel, { marginTop: 10 }]}>Species</Text>
-            <TextInput style={commonStyles.input} value={species} onChangeText={setSpecies} placeholder="canine, feline…" placeholderTextColor={theme.outline} />
-            <Text style={[commonStyles.sectionLabel, { marginTop: 10 }]}>Branch</Text>
-            <View style={styles.branchRow}>
-              {branches.map((b) => (
-                <Pressable key={b.id} style={[styles.chip, branchId === b.id && styles.chipOn]} onPress={() => setBranchId(b.id)}>
-                  <Text style={[styles.chipText, branchId === b.id && styles.chipTextOn]}>{b.name}</Text>
-                </Pressable>
-              ))}
-            </View>
-            <View style={styles.modalActions}>
-              <Pressable style={commonStyles.btnOutline} onPress={() => setWalkOpen(false)}>
-                <Text style={commonStyles.btnOutlineText}>Close</Text>
-              </Pressable>
-              <Pressable
-                style={commonStyles.btnPrimary}
-                onPress={() =>
-                  void onWalkIn({
-                    ownerName: ownerName.trim(),
-                    phone: phone.trim(),
-                    email: email.trim(),
-                    petName: petName.trim(),
-                    species: species.trim() || "unknown",
-                    branchId: branchId || branches[0]?.id || "",
-                  }).then(() => {
-                    setWalkOpen(false);
-                    setOwnerName("");
-                    setPhone("");
-                    setEmail("");
-                    setPetName("");
-                    setSpecies("canine");
-                  })
-                }
-              >
-                <Text style={commonStyles.btnPrimaryText}>Create visit</Text>
-              </Pressable>
-            </View>
           </View>
         </View>
       </Modal>
@@ -261,15 +199,23 @@ const styles = StyleSheet.create({
   docChipOn: { borderColor: theme.primary, backgroundColor: `${theme.primary}18` },
   docChipText: { fontSize: 12, fontWeight: "600", color: theme.onSurface },
   docChipTextOn: { color: theme.primary, fontWeight: "800" },
-  modalBackdrop: { flex: 1, backgroundColor: "#00000088", justifyContent: "flex-end", padding: 16 },
-  modalCard: { backgroundColor: theme.surfaceContainerHigh, borderRadius: 18, padding: 18, maxHeight: "90%" },
-  modalTitle: { fontSize: 18, fontWeight: "800", color: theme.onSurface, marginBottom: 4 },
-  branchRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  chip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999, borderWidth: 1, borderColor: theme.outlineVariant },
-  chipOn: { borderColor: theme.primary, backgroundColor: `${theme.primary}14` },
-  chipText: { fontWeight: "600", fontSize: 13 },
-  chipTextOn: { color: theme.primary, fontWeight: "800" },
-  modalActions: { flexDirection: "row", justifyContent: "flex-end", gap: 10, marginTop: 18 },
+  modalBackdrop: { flex: 1, backgroundColor: "#00000088", justifyContent: "flex-end" },
+  modalCard: {
+    backgroundColor: theme.surfaceBright,
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+    maxHeight: "92%",
+    paddingTop: 12,
+    overflow: "hidden",
+  },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 18,
+    paddingBottom: 4,
+  },
+  modalTitle: { fontSize: 18, fontWeight: "800", color: theme.onSurface },
   requestRow: {
     flexDirection: "row",
     alignItems: "center",

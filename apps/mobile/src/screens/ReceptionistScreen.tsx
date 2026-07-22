@@ -33,9 +33,6 @@ export function ReceptionistScreen({
     >
       <View style={commonStyles.card}>
         <Text style={commonStyles.cardTitle}>{screenTitle}</Text>
-        <Text style={[commonStyles.muted, { marginBottom: 12 }]}>
-          {screenHint ?? "Check guests in and manage today’s flow."}
-        </Text>
         {appointments.map((appointment, index) => (
           <View style={[styles.queueItem, index === 0 && styles.queueItemFirst]} key={appointment.id}>
             <View style={styles.queueHeader}>

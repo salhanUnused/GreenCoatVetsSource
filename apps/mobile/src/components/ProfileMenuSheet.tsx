@@ -1,4 +1,5 @@
-import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { Modal, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import type { AppBranding } from "../lib/app-branding";
 import { theme, shadows } from "../theme/theme";
@@ -24,18 +25,32 @@ export function ProfileMenuSheet({
   onClose: () => void;
   onSignOut: () => void;
 }) {
+  const insets = useSafeAreaInsets();
+  const { width: windowWidth } = useWindowDimensions();
   const productName = branding?.product_name ?? "GreenCoatVets";
   const role = formatRole(roleLabel || "guest");
+  const sheetWidth = Math.min(300, Math.max(240, windowWidth - 28));
+  const sheetTop = Math.max(insets.top, topInset, 12) + 52;
 
   return (
-    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
-      <View style={styles.root}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+      statusBarTranslucent
+      presentationStyle="overFullScreen"
+    >
+      <View style={styles.root} pointerEvents="box-none">
         <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="Dismiss profile menu" />
 
-        <View style={[styles.sheet, { top: topInset + 52 }]}>
+        <View
+          style={[styles.sheet, { top: sheetTop, width: sheetWidth, right: 14 }]}
+          pointerEvents="box-none"
+        >
           <View style={styles.header}>
             <View style={styles.avatarCircle}>
-              <MaterialIcons name="person" size={30} color={theme.primary} />
+              <MaterialIcons name="person" size={28} color={theme.primary} />
             </View>
             <View style={styles.headerText}>
               <Text style={styles.name} numberOfLines={1}>
@@ -47,32 +62,34 @@ export function ProfileMenuSheet({
                 </Text>
               ) : null}
             </View>
+            <Pressable onPress={onClose} hitSlop={10} accessibilityLabel="Close">
+              <MaterialIcons name="close" size={22} color={theme.onSurfaceVariant} />
+            </Pressable>
           </View>
 
           <View style={styles.divider} />
 
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Account</Text>
-            <View style={styles.infoRow}>
-              <View style={styles.infoIcon}>
-                <MaterialIcons name="badge" size={18} color={theme.primary} />
-              </View>
-              <View style={styles.infoBody}>
-                <Text style={styles.infoLabel}>Role</Text>
-                <Text style={styles.infoValue}>{role}</Text>
-              </View>
+          <View style={styles.infoRow}>
+            <View style={styles.infoIcon}>
+              <MaterialIcons name="badge" size={18} color={theme.primary} />
+            </View>
+            <View style={styles.infoBody}>
+              <Text style={styles.infoLabel}>Role</Text>
+              <Text style={styles.infoValue}>{role}</Text>
             </View>
           </View>
 
-          <View style={styles.divider} />
-
-          <Pressable style={styles.signOut} onPress={onSignOut} accessibilityRole="button" accessibilityLabel="Sign out">
+          <Pressable
+            style={styles.signOut}
+            onPress={() => {
+              onClose();
+              onSignOut();
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Sign out"
+          >
             <MaterialIcons name="logout" size={20} color={theme.onPrimary} />
             <Text style={styles.signOutText}>Sign out</Text>
-          </Pressable>
-
-          <Pressable style={styles.closeBtn} onPress={onClose} accessibilityRole="button">
-            <Text style={styles.closeText}>Close</Text>
           </Pressable>
         </View>
       </View>
@@ -81,27 +98,28 @@ export function ProfileMenuSheet({
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1 },
+  root: {
+    flex: 1,
+  },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(15, 23, 20, 0.4)",
+    backgroundColor: "rgba(15, 23, 20, 0.42)",
   },
   sheet: {
     position: "absolute",
-    right: 14,
-    width: 292,
     borderRadius: 18,
-    backgroundColor: theme.surfaceBright,
+    backgroundColor: "#ffffff",
     paddingHorizontal: 16,
     paddingTop: 16,
-    paddingBottom: 12,
+    paddingBottom: 14,
     borderWidth: 1,
     borderColor: theme.outlineVariant,
     ...shadows.card,
-    shadowOpacity: 0.16,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 14,
+    shadowOpacity: 0.22,
+    shadowRadius: 22,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 20,
+    zIndex: 30,
   },
   header: {
     flexDirection: "row",
@@ -109,9 +127,9 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   avatarCircle: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: theme.surfaceContainer,
@@ -120,10 +138,9 @@ const styles = StyleSheet.create({
   },
   headerText: { flex: 1, minWidth: 0 },
   name: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: "800",
     color: theme.onSurface,
-    letterSpacing: -0.2,
   },
   email: {
     marginTop: 3,
@@ -136,14 +153,6 @@ const styles = StyleSheet.create({
     backgroundColor: theme.outlineVariant,
     marginVertical: 14,
   },
-  section: { gap: 10 },
-  sectionLabel: {
-    fontSize: 11,
-    fontWeight: "800",
-    color: theme.outline,
-    textTransform: "uppercase",
-    letterSpacing: 1,
-  },
   infoRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -152,6 +161,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 12,
     backgroundColor: theme.surfaceContainer,
+    marginBottom: 14,
   },
   infoIcon: {
     width: 32,
@@ -159,7 +169,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: theme.surfaceBright,
+    backgroundColor: "#ffffff",
   },
   infoBody: { flex: 1, minWidth: 0 },
   infoLabel: {
@@ -183,6 +193,4 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
   },
   signOutText: { color: theme.onPrimary, fontWeight: "800", fontSize: 15 },
-  closeBtn: { marginTop: 8, paddingVertical: 8, alignItems: "center" },
-  closeText: { color: theme.onSurfaceVariant, fontWeight: "700", fontSize: 14 },
 });

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View, RefreshControl } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import { AppointmentMonthCalendar, localDayKey } from "../../components/AppointmentMonthCalendar";
 import { AppointmentStatusPicker } from "../../components/AppointmentStatusPicker";
@@ -29,6 +29,7 @@ export function StaffAppointmentsCalendarScreen({
   onStatusChange,
   onUploadDocument,
   onGeneratePdf,
+  onOpenConsult,
   refreshing,
   onRefresh,
 }: {
@@ -37,10 +38,10 @@ export function StaffAppointmentsCalendarScreen({
   onStatusChange: (appointmentId: string, status: string) => Promise<void>;
   onUploadDocument: (appointmentId: string) => Promise<void>;
   onGeneratePdf?: (appointmentId: string) => Promise<void>;
+  onOpenConsult?: (appointmentId: string) => void;
   refreshing: boolean;
   onRefresh: () => void;
 }) {
-  const [pdfBusyFor, setPdfBusyFor] = useState<string | null>(null);
   const [month, setMonth] = useState(() => {
     const d = new Date();
     return new Date(d.getFullYear(), d.getMonth(), 1);
@@ -49,6 +50,7 @@ export function StaffAppointmentsCalendarScreen({
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusPickerFor, setStatusPickerFor] = useState<Appointment | null>(null);
+  const [pdfBusyFor, setPdfBusyFor] = useState<string | null>(null);
 
   const loadMonth = useCallback(async () => {
     setLoading(true);
@@ -112,8 +114,7 @@ export function StaffAppointmentsCalendarScreen({
       }
     >
       <View style={commonStyles.card}>
-        <Text style={commonStyles.cardTitle}>Appointment calendar</Text>
-        <Text style={[commonStyles.muted, { marginBottom: 12 }]}>Tap a day to see visits. Change status or attach files from the list.</Text>
+        <Text style={commonStyles.cardTitle}>Calendar</Text>
         <AppointmentMonthCalendar
           month={month}
           onMonthChange={setMonth}
@@ -125,29 +126,39 @@ export function StaffAppointmentsCalendarScreen({
 
       <View style={commonStyles.card}>
         <Text style={commonStyles.cardTitle}>
-          {selectedDay.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}
+          {selectedDay.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}
         </Text>
         {loading ? (
-          <ActivityIndicator color={theme.primary} style={{ marginVertical: 16 }} />
+          <Text style={commonStyles.muted}>Loading…</Text>
         ) : dayAppointments.length ? (
           dayAppointments.map((a, i) => (
             <View key={a.id} style={[styles.row, i === dayAppointments.length - 1 && styles.rowLast]}>
-              <PetAvatar uri={a.pets?.photo_url} size={44} />
-              <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text style={styles.petName}>{a.pets?.name ?? "Pet"}</Text>
-                <Text style={commonStyles.muted}>{a.owners?.full_name ?? "Owner"}</Text>
-                <Text style={styles.time}>
-                  {new Date(a.starts_at).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
-                  {a.branches?.name ? ` · ${a.branches.name}` : ""}
-                </Text>
-                <Pressable onPress={() => setStatusPickerFor(a)} style={styles.statusPill}>
-                  <Text style={styles.statusText}>{a.status.replace(/_/g, " ")}</Text>
-                  <MaterialIcons name="expand-more" size={16} color={theme.primary} />
-                </Pressable>
-              </View>
+              <Pressable
+                style={{ flex: 1, flexDirection: "row", alignItems: "flex-start" }}
+                onPress={() => onOpenConsult?.(a.id)}
+              >
+                <PetAvatar uri={a.pets?.photo_url} size={44} />
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <Text style={styles.petName}>{a.pets?.name ?? "Pet"}</Text>
+                  <Text style={commonStyles.muted}>{a.owners?.full_name ?? "Owner"}</Text>
+                  <Text style={styles.time}>
+                    {new Date(a.starts_at).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
+                    {a.branches?.name ? ` · ${a.branches.name}` : ""}
+                  </Text>
+                  <Pressable onPress={() => setStatusPickerFor(a)} style={styles.statusPill}>
+                    <Text style={styles.statusText}>{a.status.replace(/_/g, " ")}</Text>
+                    <MaterialIcons name="expand-more" size={16} color={theme.primary} />
+                  </Pressable>
+                </View>
+              </Pressable>
               <View style={styles.actionCol}>
+                {onOpenConsult ? (
+                  <Pressable style={styles.attachBtn} onPress={() => onOpenConsult(a.id)}>
+                    <MaterialIcons name="medical-services" size={20} color={theme.primary} />
+                  </Pressable>
+                ) : null}
                 <Pressable style={styles.attachBtn} onPress={() => void onUploadDocument(a.id)}>
-                  <MaterialIcons name="attach-file" size={22} color={theme.primary} />
+                  <MaterialIcons name="attach-file" size={20} color={theme.primary} />
                 </Pressable>
                 {onGeneratePdf ? (
                   <Pressable
@@ -162,7 +173,7 @@ export function StaffAppointmentsCalendarScreen({
                       }
                     }}
                   >
-                    <MaterialIcons name="picture-as-pdf" size={22} color={theme.primary} />
+                    <MaterialIcons name="picture-as-pdf" size={20} color={theme.primary} />
                   </Pressable>
                 ) : null}
               </View>

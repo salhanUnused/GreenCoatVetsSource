@@ -3,7 +3,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import { MaterialIcons } from "@expo/vector-icons";
-import { DEFAULT_PET_SPECIES_BOOKING_VALUE, PET_SPECIES_BOOKING_OPTIONS } from "@saasclinics/lib";
+import { DEFAULT_PET_SPECIES_BOOKING_VALUE, formatClinicDateTime, PET_SPECIES_BOOKING_OPTIONS } from "@saasclinics/lib";
 import { Appointment } from "../types/app";
 import { commonStyles } from "../theme/commonStyles";
 import { theme } from "../theme/theme";
@@ -41,10 +41,13 @@ export function OwnerBookingScreen({
   ownerNeedsName,
   ownerPhone,
   ownerEmail,
+  clinicTimezone,
   onCreate,
   onCancelAppointment,
   onRequestTimeChange,
   timeChangeRequests,
+  onOpenConsentPdf,
+  onDownloadConsentPdf,
 }: {
   clinicId: string;
   petOptions: Array<{
@@ -61,6 +64,7 @@ export function OwnerBookingScreen({
   ownerNeedsName?: boolean;
   ownerPhone?: string | null;
   ownerEmail?: string | null;
+  clinicTimezone?: string | null;
   onCreate: (input: {
     petId?: string;
     branchId: string;
@@ -87,6 +91,8 @@ export function OwnerBookingScreen({
   onCancelAppointment: (appointmentId: string) => Promise<void>;
   onRequestTimeChange: (appointmentId: string, startsAtIso: string, notes?: string) => Promise<void>;
   timeChangeRequests: Array<{ appointment_id: string; requested_starts_at: string; status: string }>;
+  onOpenConsentPdf?: (appointmentId: string) => Promise<void>;
+  onDownloadConsentPdf?: (appointmentId: string) => Promise<void>;
 }) {
   const hasPets = petOptions.length > 0;
   const hasBookingDoctors = bookingDoctors.length > 0;
@@ -299,8 +305,10 @@ export function OwnerBookingScreen({
       style={commonStyles.screen}
       contentContainerStyle={[commonStyles.scrollContent, { paddingBottom: 40 }]}
       scrollEnabled={scrollEnabled}
+      nestedScrollEnabled={scrollEnabled}
       keyboardShouldPersistTaps="handled"
-    >      <OwnerNeonCard>
+    >
+      <OwnerNeonCard>
         <Text style={commonStyles.cardTitle}>Book appointment</Text>
 
         <View style={styles.typeRow}>
@@ -621,7 +629,7 @@ export function OwnerBookingScreen({
             <View key={a.id} style={styles.apptRow}>
               <PetAvatar uri={a.pets?.photo_url} size={38} />
               <View style={{ flex: 1 }}>
-                <Text style={styles.apptTime}>{new Date(a.starts_at).toLocaleString()}</Text>
+                <Text style={styles.apptTime}>{formatClinicDateTime(a.starts_at, clinicTimezone)}</Text>
                 <Text style={commonStyles.muted}>
                   {a.pets?.name ?? "Pet"} · {a.branches?.name ?? "Branch"} · {(a.appointment_type ?? "").replace(/_/g, " ")}
                 </Text>
@@ -637,6 +645,18 @@ export function OwnerBookingScreen({
                 </View>
               </View>
               <View style={styles.apptActions}>
+                {a.consent_pdf_path?.trim() && onOpenConsentPdf ? (
+                  <>
+                    <Pressable style={commonStyles.btnOutline} onPress={() => void onOpenConsentPdf(a.id)}>
+                      <Text style={commonStyles.btnOutlineText}>Consent</Text>
+                    </Pressable>
+                    {onDownloadConsentPdf ? (
+                      <Pressable style={commonStyles.btnOutline} onPress={() => void onDownloadConsentPdf(a.id)}>
+                        <Text style={commonStyles.btnOutlineText}>Save</Text>
+                      </Pressable>
+                    ) : null}
+                  </>
+                ) : null}
                 {a.status === "scheduled" || a.status === "checked_in" ? (
                   <>
                     <Pressable

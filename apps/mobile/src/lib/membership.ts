@@ -4,7 +4,10 @@ const STAFF_ROLES = new Set([
   "clinic_admin",
   "branch_admin",
   "doctor",
+  "junior_doctor",
   "senior_doctor",
+  "manager",
+  "junior",
   "receptionist",
   "lab_technician",
   "pharmacist",
@@ -12,7 +15,7 @@ const STAFF_ROLES = new Set([
 
 export type MembershipRow = { clinic_id: string; role: string };
 
-const DOCTOR_ROLES = new Set(["doctor", "senior_doctor"]);
+const DOCTOR_ROLES = new Set(["doctor", "junior_doctor", "senior_doctor"]);
 
 export function isDoctorRole(role: string | null | undefined): boolean {
   return DOCTOR_ROLES.has((role ?? "").toLowerCase());
@@ -23,7 +26,8 @@ export function isSeniorDoctorRole(role: string | null | undefined): boolean {
 }
 
 export function isRegularDoctorRole(role: string | null | undefined): boolean {
-  return (role ?? "").toLowerCase() === "doctor";
+  const normalized = (role ?? "").toLowerCase();
+  return normalized === "doctor" || normalized === "junior_doctor";
 }
 
 export async function resolveSuperAdminClinicId(): Promise<string | null> {

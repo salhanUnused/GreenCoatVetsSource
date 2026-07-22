@@ -19,14 +19,25 @@ import { AppointmentStatusPicker } from "../components/AppointmentStatusPicker";
 import { fetchVisitAttachments, openVisitAttachment, type VisitAttachmentRow } from "../lib/visitAttachments";
 import { handleDateTimePickerChange } from "../lib/dateTimePickerBridge";
 import { formatDosageForPetWeight, type CatalogMedicine } from "../lib/dosageByWeight";
+import { sharePdfFromUrl, signedPdfUrl } from "../lib/open-or-share-document";
 import { supabase } from "../lib/supabase";
+import { formatClinicDateTime, visitReportPdfSourceLabel } from "@saasclinics/lib";
 import { DoctorStackParamList } from "../navigation/types";
 import { commonStyles } from "../theme/commonStyles";
 import { theme } from "../theme/theme";
 import { PetAvatar } from "../components/PetAvatar";
 
 type RxLine = { medicine_name: string; dosage: string; frequency: string; duration: string; instructions: string };
-type PreviousVisit = { id: string; started_at: string | null; diagnosis: string | null; treatment_plan: string | null; follow_up_at: string | null };
+type PreviousVisit = {
+  id: string;
+  started_at: string | null;
+  diagnosis: string | null;
+  treatment_plan: string | null;
+  follow_up_at: string | null;
+  symptoms?: string | null;
+  visit_report_pdf_path?: string | null;
+  visit_report_pdf_source?: string | null;
+};
 type PreviousRx = {
   id: string;
   issued_at: string;
@@ -123,6 +134,7 @@ export function DoctorConsultScreen({
   const [ownerPhone, setOwnerPhone] = useState("");
   const [clinicName, setClinicName] = useState("Clinic");
   const [clinicLogoUrl, setClinicLogoUrl] = useState<string | null>(null);
+  const [clinicTimezone, setClinicTimezone] = useState<string | null>(null);
   const [doctorName, setDoctorName] = useState("Doctor");
   const [previousVisits, setPreviousVisits] = useState<PreviousVisit[]>([]);
   const [previousDiagnosis, setPreviousDiagnosis] = useState<string[]>([]);
@@ -217,7 +229,7 @@ export function DoctorConsultScreen({
     setPrescriberStaffId(effectivePrescriber);
 
     const [{ data: clinicRow }, { data: doctorRow }, { data: catalogRows }] = await Promise.all([
-      supabase.from("clinics").select("name, image_url").eq("id", clinicId).maybeSingle(),
+      supabase.from("clinics").select("name, image_url, timezone").eq("id", clinicId).maybeSingle(),
       effectivePrescriber
         ? supabase.from("staff_profiles").select("full_name").eq("id", effectivePrescriber).maybeSingle()
         : Promise.resolve({ data: null }),
@@ -244,13 +256,14 @@ export function DoctorConsultScreen({
     setOwnerPhone(owner?.phone ?? "");
     setClinicName((clinicRow as { name?: string } | null)?.name ?? "Clinic");
     setClinicLogoUrl((clinicRow as { image_url?: string | null } | null)?.image_url ?? null);
+    setClinicTimezone((clinicRow as { timezone?: string | null } | null)?.timezone ?? null);
     setDoctorName((doctorRow as { full_name?: string } | null)?.full_name ?? "Doctor");
 
     if (pet?.id) {
       const [{ data: visitsData }, { data: rxData }] = await Promise.all([
         supabase
           .from("visits")
-          .select("id, started_at, diagnosis, treatment_plan, follow_up_at")
+          .select("id, started_at, diagnosis, treatment_plan, follow_up_at, symptoms, visit_report_pdf_path, visit_report_pdf_source")
           .eq("clinic_id", clinicId)
           .eq("pet_id", pet.id)
           .order("started_at", { ascending: false })
@@ -389,13 +402,20 @@ export function DoctorConsultScreen({
 
   async function generateVisitSummaryPdf() {
     if (!visitId || !appointmentId) return;
-    const { data: apptRow } = await supabase
-      .from("appointments")
-      .select("branch_id, pet_id")
-      .eq("id", appointmentId)
-      .eq("clinic_id", clinicId)
-      .maybeSingle();
+    const [{ data: apptRow }, { data: visitRow }] = await Promise.all([
+      supabase
+        .from("appointments")
+        .select("branch_id, pet_id")
+        .eq("id", appointmentId)
+        .eq("clinic_id", clinicId)
+        .maybeSingle(),
+      supabase.from("visits").select("started_at").eq("id", visitId).eq("clinic_id", clinicId).maybeSingle(),
+    ]);
     if (!apptRow?.branch_id || !apptRow.pet_id) return;
+
+    const visitDateIso =
+      (visitRow as { started_at?: string | null } | null)?.started_at?.trim() || new Date().toISOString();
+    const visitDateLabel = formatClinicDateTime(visitDateIso, clinicTimezone);
 
     const logoHtml = clinicLogoUrl
       ? `<img src="${escHtml(clinicLogoUrl)}" style="width:56px;height:56px;object-fit:contain;border-radius:8px;border:1px solid #c5d7d1;background:#fff" />`
@@ -409,7 +429,7 @@ export function DoctorConsultScreen({
         </div>
       </div>
       <div style="padding:20px 22px">
-        <p style="margin:0 0 8px"><b>Issued:</b> ${escHtml(new Date().toLocaleString())}</p>
+        <p style="margin:0 0 8px"><b>Visit date:</b> ${escHtml(visitDateLabel)}</p>
         <p style="margin:0 0 8px"><b>Doctor:</b> ${escHtml(doctorName)}</p>
         <p style="margin:0 0 8px"><b>Patient:</b> ${escHtml(petQuick?.name ?? "Pet")} (${escHtml(petQuick?.breed ?? "-")})</p>
         <p style="margin:0 0 14px"><b>Owner:</b> ${escHtml(ownerName)} ${ownerPhone ? `(${escHtml(ownerPhone)})` : ""}</p>
@@ -450,12 +470,42 @@ export function DoctorConsultScreen({
       .from("visits")
       .update({
         visit_report_pdf_path: path,
+        visit_report_pdf_source: "generated",
         visit_report_pdf_generated_at: new Date().toISOString(),
       })
       .eq("id", visitId)
       .eq("clinic_id", clinicId);
     const { data: signed } = await supabase.storage.from("medical-files").createSignedUrl(path, 60 * 30);
     setLastVisitSummaryUrl(signed?.signedUrl ?? null);
+  }
+
+  async function openPreviousVisitPdf(visit: PreviousVisit) {
+    const path = visit.visit_report_pdf_path?.trim();
+    if (!path) {
+      Alert.alert("No report", "This visit does not have a PDF yet.");
+      return;
+    }
+    try {
+      const url = await signedPdfUrl(path);
+      await Linking.openURL(url);
+    } catch (e) {
+      Alert.alert("Could not open PDF", e instanceof Error ? e.message : "Try again.");
+    }
+  }
+
+  async function downloadPreviousVisitPdf(visit: PreviousVisit) {
+    const path = visit.visit_report_pdf_path?.trim();
+    if (!path) {
+      Alert.alert("No report", "This visit does not have a PDF yet.");
+      return;
+    }
+    try {
+      const label = visitReportPdfSourceLabel(visit.visit_report_pdf_source);
+      const url = await signedPdfUrl(path);
+      await sharePdfFromUrl(url, `${label}-${visit.id}.pdf`);
+    } catch (e) {
+      Alert.alert("Could not save PDF", e instanceof Error ? e.message : "Try again.");
+    }
   }
 
   async function savePrescription() {
@@ -893,8 +943,27 @@ export function DoctorConsultScreen({
         <Text style={commonStyles.cardTitle}>Visit history</Text>
         {previousVisits.slice(0, 6).map((v) => (
           <View key={v.id} style={styles.historyRow}>
-            <Text style={styles.reuseTitle}>{v.started_at ? new Date(v.started_at).toLocaleDateString() : "—"}</Text>
-            <Text style={commonStyles.muted}>{v.diagnosis ?? "No diagnosis"}</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.reuseTitle}>
+                {v.started_at ? formatClinicDateTime(v.started_at, clinicTimezone) : "—"}
+              </Text>
+              {v.symptoms?.trim() ? <Text style={commonStyles.muted}>Symptoms: {v.symptoms}</Text> : null}
+              <Text style={commonStyles.muted}>{v.diagnosis ?? "No diagnosis"}</Text>
+              {v.treatment_plan?.trim() ? <Text style={commonStyles.muted}>Plan: {v.treatment_plan}</Text> : null}
+              {v.visit_report_pdf_path?.trim() ? (
+                <Text style={styles.pdfTypeLabel}>{visitReportPdfSourceLabel(v.visit_report_pdf_source)}</Text>
+              ) : null}
+            </View>
+            {v.visit_report_pdf_path?.trim() ? (
+              <View style={styles.historyPdfActions}>
+                <Pressable style={commonStyles.btnOutline} onPress={() => void openPreviousVisitPdf(v)}>
+                  <Text style={commonStyles.btnOutlineText}>Open</Text>
+                </Pressable>
+                <Pressable style={commonStyles.btnOutline} onPress={() => void downloadPreviousVisitPdf(v)}>
+                  <Text style={commonStyles.btnOutlineText}>Save</Text>
+                </Pressable>
+              </View>
+            ) : null}
           </View>
         ))}
         {!previousVisits.length ? <Text style={commonStyles.emptyState}>No previous consultations found.</Text> : null}
@@ -1009,8 +1078,13 @@ const styles = StyleSheet.create({
   },
   reuseTitle: { fontWeight: "700", color: theme.onSurface },
   historyRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: theme.outlineVariant,
     paddingVertical: 8,
   },
+  historyPdfActions: { flexDirection: "row", gap: 6 },
+  pdfTypeLabel: { marginTop: 4, fontSize: 11, fontWeight: "700", color: theme.primary },
 });

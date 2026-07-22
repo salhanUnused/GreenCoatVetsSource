@@ -1,5 +1,6 @@
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import type { PDFImage } from "pdf-lib";
+import { formatClinicDateTime } from "@saasclinics/lib";
 import { normalizeInvoiceTemplateLayout } from "@/lib/invoicing/invoice-template";
 
 const PAGE_W = 595;
@@ -513,6 +514,7 @@ export async function buildPrescriptionPdfBytes(opts: {
   ownerName: string;
   doctorName: string;
   issuedAt: Date;
+  clinicTimezone?: string | null;
   /** Optional clinic logo (PNG or JPEG bytes). */
   logoBytes?: Uint8Array | null;
   items: Array<{
@@ -524,6 +526,7 @@ export async function buildPrescriptionPdfBytes(opts: {
   }>;
   notes?: string | null;
 }): Promise<Uint8Array> {
+  const issuedLabel = formatClinicDateTime(opts.issuedAt, opts.clinicTimezone);
   const doc = await PDFDocument.create();
   let page = doc.addPage([PAGE_W, PAGE_H]);
   drawPrintPageFrame(page);
@@ -616,14 +619,14 @@ export async function buildPrescriptionPdfBytes(opts: {
     font: fontBold,
     color: rgb(0.9, 0.98, 0.95),
   });
-  drawRight(page, opts.issuedAt.toLocaleString(), PAGE_W - MARGIN, topBandBottom + bannerH - 30, 9, font, rgb(0.92, 0.98, 0.96));
+  drawRight(page, issuedLabel, PAGE_W - MARGIN, topBandBottom + bannerH - 30, 9, font, rgb(0.92, 0.98, 0.96));
 
   y = topBandBottom - 22;
 
   const midX = MARGIN + (PAGE_W - 2 * MARGIN) * 0.52;
   const col2 = midX + 8;
   const leftBlock = `Owner: ${opts.ownerName}\nPatient: ${opts.petName}`;
-  const rightBlock = `Veterinarian: ${opts.doctorName}\nIssued: ${opts.issuedAt.toLocaleString()}`;
+  const rightBlock = `Veterinarian: ${opts.doctorName}\nIssued: ${issuedLabel}`;
   let yL = y;
   let yR = y;
   for (const line of wrapLines(sanitizePdfText(leftBlock), 42)) {

@@ -3,7 +3,10 @@ export type AppRole =
   | "clinic_admin"
   | "branch_admin"
   | "doctor"
+  | "junior_doctor"
   | "senior_doctor"
+  | "manager"
+  | "junior"
   | "receptionist"
   | "lab_technician"
   | "pharmacist"
@@ -23,7 +26,10 @@ export function roleCanGenerateQr(
         "clinic_admin",
         "branch_admin",
         "doctor",
+        "junior_doctor",
         "senior_doctor",
+        "manager",
+        "junior",
         "receptionist",
         "lab_technician",
         "pharmacist",
@@ -37,14 +43,17 @@ export function roleCanGenerateQr(
       allowedRoles: [
         "branch_admin",
         "doctor",
+        "junior_doctor",
         "senior_doctor",
+        "manager",
+        "junior",
         "receptionist",
         "lab_technician",
         "pharmacist",
       ],
     };
   }
-  if (role === "receptionist" || role === "doctor" || role === "senior_doctor") {
+  if (role === "receptionist" || role === "doctor" || role === "junior_doctor" || role === "senior_doctor") {
     return { clinicSelectable: false, allowedRoles: ["pet_owner"] };
   }
   return { clinicSelectable: false, allowedRoles: [] };
@@ -211,6 +220,7 @@ export function getRoleNavGroups(role: AppRole, isSuperAdmin: boolean): NavGroup
         },
       ];
     case "doctor":
+    case "junior_doctor":
     case "senior_doctor":
       return [
         base,
@@ -233,6 +243,22 @@ export function getRoleNavGroups(role: AppRole, isSuperAdmin: boolean): NavGroup
         {
           title: "Onboarding",
           items: [{ href: "/invite-qrs", label: "Clinic onboarding QR" }],
+        },
+      ];
+    case "manager":
+    case "junior":
+      return [
+        base,
+        {
+          title: "Clinical records",
+          items: [
+            { href: "/owners", label: "Owners" },
+            { href: "/pets", label: "Pets" },
+            { href: "/appointments", label: "Appointments" },
+            { href: "/medical-records", label: "Medical records" },
+            { href: "/medicines", label: "Medicine catalog" },
+            { href: "/notifications-center", label: "Notifications" },
+          ],
         },
       ];
     case "receptionist":

@@ -479,7 +479,7 @@ export async function regeneratePrescriptionPdf(prescriptionId: string) {
 
   if (iErr) throw new Error(iErr.message);
 
-  const { data: clinic } = await supabase.from("clinics").select("name, image_url").eq("id", clinic_id).single();
+  const { data: clinic } = await supabase.from("clinics").select("name, image_url, timezone").eq("id", clinic_id).single();
   const logoBytes = await fetchClinicLogoBytesForPdf(supabase, clinic?.image_url as string | null | undefined);
 
   const pet = rx.pets as { name?: string } | null;
@@ -497,6 +497,7 @@ export async function regeneratePrescriptionPdf(prescriptionId: string) {
     ownerName: ownerDisplayName(owner),
     doctorName: doctor?.full_name ?? "—",
     issuedAt: new Date(rx.issued_at),
+    clinicTimezone: clinic?.timezone,
     logoBytes,
     items: items ?? [],
     notes: rx.notes,

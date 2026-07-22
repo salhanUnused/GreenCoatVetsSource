@@ -31,6 +31,15 @@ export {
 } from "./appointment-datetime";
 
 export {
+  DEFAULT_CLINIC_TIMEZONE,
+  formatClinicDate,
+  formatClinicDateTime,
+  resolveClinicTimezone,
+} from "./clinic-datetime";
+
+export { visitReportPdfSourceLabel, type VisitReportPdfSource } from "./visit-report-labels";
+
+export {
   DEFAULT_OPENROUTER_MODEL,
   OPENROUTER_MODEL_FALLBACKS,
   extractOpenRouterMessageText,

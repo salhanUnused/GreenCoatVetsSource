@@ -1,5 +1,6 @@
 import * as Print from "expo-print";
 import * as FileSystem from "expo-file-system/legacy";
+import { formatClinicDateTime } from "@saasclinics/lib";
 import { supabase } from "./supabase";
 
 function bytesFromBase64(base64: string) {
@@ -34,7 +35,7 @@ export async function generatePrescriptionPdf(
   try {
     const { data: rx, error: rxErr } = await supabase
       .from("prescriptions")
-      .select("id, notes, visit_id, pet_id, doctor_id, pdf_url")
+      .select("id, notes, visit_id, pet_id, doctor_id, pdf_url, issued_at")
       .eq("id", prescriptionId)
       .eq("clinic_id", clinicId)
       .maybeSingle();
@@ -58,7 +59,7 @@ export async function generatePrescriptionPdf(
       rx.doctor_id
         ? supabase.from("staff_profiles").select("full_name").eq("id", rx.doctor_id).maybeSingle()
         : Promise.resolve({ data: null }),
-      supabase.from("clinics").select("name, image_url").eq("id", clinicId).maybeSingle(),
+      supabase.from("clinics").select("name, image_url, timezone").eq("id", clinicId).maybeSingle(),
     ]);
 
     const lines =
@@ -94,7 +95,9 @@ export async function generatePrescriptionPdf(
 
     const clinicName = (clinic as { name?: string } | null)?.name ?? "Clinic";
     const clinicLogoUrl = (clinic as { image_url?: string | null } | null)?.image_url ?? null;
+    const clinicTimezone = (clinic as { timezone?: string | null } | null)?.timezone ?? null;
     const doctorName = (doctor as { full_name?: string } | null)?.full_name ?? "Doctor";
+    const issuedLabel = formatClinicDateTime((rx.issued_at as string) ?? new Date().toISOString(), clinicTimezone);
     const petName = petRaw?.name ?? "Pet";
     const petBreed = petRaw?.breed ?? "-";
     const ownerName = owner?.full_name ?? "Owner";
@@ -124,6 +127,7 @@ export async function generatePrescriptionPdf(
         </div>
       </div>
       <div style="padding:20px 22px">
+        <p><b>Issued:</b> ${escHtml(issuedLabel)}</p>
         <p><b>Doctor:</b> ${escHtml(doctorName)}</p>
         <p><b>Pet:</b> ${escHtml(petName)} (${escHtml(petBreed)})</p>
         <p><b>Owner:</b> ${escHtml(ownerName)} ${ownerPhone ? `(${escHtml(ownerPhone)})` : ""}</p>

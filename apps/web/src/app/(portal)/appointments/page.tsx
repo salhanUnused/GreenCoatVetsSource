@@ -137,7 +137,7 @@ export default async function AppointmentsPage({
       .from("staff_profiles")
       .select("id, full_name")
       .eq("clinic_id", clinic_id)
-      .in("role", ["doctor", "senior_doctor"])
+      .in("role", ["doctor", "junior_doctor", "senior_doctor"])
       .eq("is_active", true)
       .order("full_name", { ascending: true }),
     supabase

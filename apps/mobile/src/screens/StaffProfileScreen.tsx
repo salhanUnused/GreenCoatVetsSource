@@ -18,11 +18,14 @@ import { isDoctorRole } from "../lib/membership";
 import { commonStyles } from "../theme/commonStyles";
 import { theme } from "../theme/theme";
 
-type StaffRole = "doctor" | "senior_doctor" | "lab_technician" | "pharmacist";
+type StaffRole = "doctor" | "junior_doctor" | "senior_doctor" | "manager" | "junior" | "lab_technician" | "pharmacist";
 
 const ROLE_LABEL: Record<StaffRole, string> = {
   doctor: "Veterinarian",
+  junior_doctor: "Junior veterinarian",
   senior_doctor: "Senior veterinarian",
+  manager: "Manager",
+  junior: "Junior staff",
   lab_technician: "Laboratory",
   pharmacist: "Pharmacy",
 };
@@ -54,7 +57,11 @@ async function loadOrCreateStaffProfile(clinicId: string, staffRoleHint: StaffRo
   const membershipRole =
     (memberships ?? []).find((m) => (m.role as string) === staffRoleHint)?.role ??
     (memberships ?? []).find((m) => isDoctorRole(m.role as string) && isDoctorRole(staffRoleHint))?.role ??
-    (memberships ?? []).find((m) => ["doctor", "senior_doctor", "lab_technician", "pharmacist"].includes(m.role as string))
+    (memberships ?? []).find((m) =>
+      ["doctor", "junior_doctor", "senior_doctor", "manager", "junior", "lab_technician", "pharmacist"].includes(
+        m.role as string,
+      ),
+    )
       ?.role;
 
   let query = supabase
@@ -65,7 +72,7 @@ async function loadOrCreateStaffProfile(clinicId: string, staffRoleHint: StaffRo
     .eq("is_active", true);
 
   if (isDoctorRole(staffRoleHint)) {
-    query = query.in("role", ["doctor", "senior_doctor"]);
+    query = query.in("role", ["doctor", "junior_doctor", "senior_doctor"]);
   } else {
     query = query.eq("role", staffRoleHint);
   }

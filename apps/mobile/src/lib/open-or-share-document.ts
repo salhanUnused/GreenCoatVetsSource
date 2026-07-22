@@ -1,9 +1,20 @@
 import { Alert, Linking } from "react-native";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
+import { supabase } from "./supabase";
 
 function safeFilename(name: string) {
   return name.replace(/[^\w.-]+/g, "_").slice(0, 80) || "document.pdf";
+}
+
+/** Resolve a storage path or public URL to a short-lived signed PDF URL. */
+export async function signedPdfUrl(path: string, bucket = "medical-files"): Promise<string> {
+  if (path.startsWith("http://") || path.startsWith("https://")) return path;
+  const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, 60 * 20);
+  if (error || !data?.signedUrl) {
+    throw new Error(error?.message ?? "Could not open PDF.");
+  }
+  return data.signedUrl;
 }
 
 /** Download a PDF to cache and open the native share sheet (save, AirDrop, etc.). */

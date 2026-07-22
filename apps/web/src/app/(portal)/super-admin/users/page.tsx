@@ -17,7 +17,10 @@ const ASSIGN_ROLES = [
   { value: "clinic_admin", label: "Clinic admin" },
   { value: "branch_admin", label: "Branch admin" },
   { value: "doctor", label: "Doctor" },
+  { value: "junior_doctor", label: "Junior doctor" },
   { value: "senior_doctor", label: "Senior doctor" },
+  { value: "manager", label: "Manager" },
+  { value: "junior", label: "Junior" },
   { value: "receptionist", label: "Receptionist" },
   { value: "lab_technician", label: "Lab technician" },
   { value: "pharmacist", label: "Pharmacist" },
@@ -159,8 +162,12 @@ export default async function SuperAdminUsersPage({
             />
           </label>
           <label className="flex flex-col gap-0.5 text-[11px]">
-            <span className="font-semibold text-slate-700">Doctor/Senior doctor working hours</span>
-            <input name="working_hours" className="rounded border border-slate-200 bg-white px-2 py-1.5 text-[12px]" placeholder="If role is Doctor or Senior doctor" />
+            <span className="font-semibold text-slate-700">Doctor/Junior/Senior doctor working hours</span>
+            <input
+              name="working_hours"
+              className="rounded border border-slate-200 bg-white px-2 py-1.5 text-[12px]"
+              placeholder="If role is Doctor, Junior doctor, or Senior doctor"
+            />
           </label>
           <label className="flex items-center gap-2 text-[11px] md:col-span-2 lg:col-span-3">
             <input type="checkbox" name="confirm_assign" required className="rounded border-slate-300" />

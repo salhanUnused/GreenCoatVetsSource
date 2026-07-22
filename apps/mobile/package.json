@@ -11,7 +11,8 @@
     "eas:login": "eas login",
     "eas:configure": "eas build:configure",
     "eas:env": "eas env:push --environment preview --path .env.local",
-    "build:apk": "eas build -p android --profile preview"
+    "build:apk": "eas build -p android --profile preview",
+    "eas-build-pre-install": "cd ../.. && npm install --workspace=@saasclinics/mobile --include-workspace-root"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "^2.1.2",

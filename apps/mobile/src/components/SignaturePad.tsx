@@ -8,7 +8,7 @@ const HTML = `<!DOCTYPE html><html><head>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
 <style>
   *{box-sizing:border-box;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
-  html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:#fff;touch-action:none;overscroll-behavior:none}
+  html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:#fff;touch-action:none;overscroll-behavior:none;-webkit-overflow-scrolling:auto}
   canvas{display:block;width:100%;height:100%;touch-action:none;overscroll-behavior:none}
 </style></head><body>
 <canvas id="c"></canvas>
@@ -88,6 +88,7 @@ const HTML = `<!DOCTYPE html><html><head>
   canvas.addEventListener('mousemove', move);
   window.addEventListener('mouseup', end);
 
+  document.body.addEventListener('touchstart', function(e){ e.preventDefault(); }, { passive: false });
   document.body.addEventListener('touchmove', function(e){ e.preventDefault(); }, { passive: false });
 
   window.clearPad = function(){ resize(); post({ type: 'signature', value: '' }); };
@@ -101,7 +102,7 @@ type WebViewHandle = {
 export function SignaturePad({
   onChange,
   onDrawActiveChange,
-  height = 200,
+  height = 220,
 }: {
   onChange: (dataUrl: string | null) => void;
   /** Parent should disable ScrollView while this is true. */
@@ -144,15 +145,12 @@ export function SignaturePad({
 
   return (
     <View style={styles.wrap}>
+      {/* Lock parent scroll as soon as the finger lands — do not claim responders (that steals ink from WebView). */}
       <View
         style={[styles.pad, { height }]}
         onTouchStart={() => setLock(true)}
         onTouchEnd={() => setLock(false)}
         onTouchCancel={() => setLock(false)}
-        // Claim the gesture so the parent ScrollView does not scroll while signing.
-        onStartShouldSetResponder={() => true}
-        onMoveShouldSetResponder={() => true}
-        onResponderTerminationRequest={() => false}
       >
         <WebView
           ref={(node) => {
@@ -162,12 +160,18 @@ export function SignaturePad({
           source={{ html: HTML }}
           onMessage={onMessage}
           javaScriptEnabled
+          scrollEnabled={false}
+          bounces={false}
+          showsHorizontalScrollIndicator={false}
+          showsVerticalScrollIndicator={false}
           style={styles.webview}
           {...({
             nestedScrollEnabled: false,
             overScrollMode: "never",
             setSupportMultipleWindows: false,
             androidLayerType: Platform.OS === "android" ? "hardware" : undefined,
+            scalesPageToFit: false,
+            allowsInlineMediaPlayback: true,
           } as object)}
         />
       </View>
@@ -183,7 +187,7 @@ export function SignaturePad({
           <Text style={styles.btnText}>Clear</Text>
         </Pressable>
       </View>
-      <Text style={styles.hint}>Sign in the box above — scrolling is locked while you draw.</Text>
+      <Text style={styles.hint}>Sign in the box above — scrolling locks while you draw.</Text>
     </View>
   );
 }

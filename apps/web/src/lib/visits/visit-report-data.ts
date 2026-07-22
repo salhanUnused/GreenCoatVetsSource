@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { formatSpeciesLabel } from "@saasclinics/lib";
+import { formatClinicDateTime, formatSpeciesLabel } from "@saasclinics/lib";
 
 function ownerName(o: {
   first_name?: string | null;
@@ -54,7 +54,8 @@ export async function loadVisitReportPayload(supabase: SupabaseClient, visitId: 
 
   if (vErr || !visit) throw new Error(vErr?.message ?? "Visit not found.");
 
-  const { data: clinic } = await supabase.from("clinics").select("name").eq("id", visit.clinic_id as string).maybeSingle();
+  const { data: clinic } = await supabase.from("clinics").select("name, timezone").eq("id", visit.clinic_id as string).maybeSingle();
+  const clinicTz = clinic?.timezone;
 
   const { data: evaluation } = await supabase.from("visit_clinical_evaluations").select("*").eq("visit_id", visitId).maybeSingle();
 
@@ -136,10 +137,10 @@ export async function loadVisitReportPayload(supabase: SupabaseClient, visitId: 
     }
   }
 
-  const t0 = visit.completed_at ?? visit.started_at ?? visit.created_at;
-  const visitWhen = t0 ? new Date(t0 as string).toLocaleString() : "—";
-  const completedWhen = visit.completed_at ? new Date(visit.completed_at as string).toLocaleString() : "—";
-  const fu = visit.follow_up_at ? new Date(visit.follow_up_at as string).toLocaleString() : "";
+  const t0 = visit.started_at ?? visit.created_at ?? visit.completed_at;
+  const visitWhen = t0 ? formatClinicDateTime(t0 as string, clinicTz) : "—";
+  const completedWhen = visit.completed_at ? formatClinicDateTime(visit.completed_at as string, clinicTz) : "—";
+  const fu = visit.follow_up_at ? formatClinicDateTime(visit.follow_up_at as string, clinicTz) : "";
 
   return {
     clinicName: String(clinic?.name ?? "Clinic"),

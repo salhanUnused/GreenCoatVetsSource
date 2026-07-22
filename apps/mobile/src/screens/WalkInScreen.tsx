@@ -126,7 +126,7 @@ export function WalkInScreen({
         )
       }
       keyboardShouldPersistTaps="handled"
-      nestedScrollEnabled
+      nestedScrollEnabled={scrollEnabled}
       showsVerticalScrollIndicator
       scrollEnabled={scrollEnabled}
     >

@@ -14,6 +14,7 @@ export type Appointment = {
   pet_id?: string;
   owner_id?: string;
   doctor_id?: string | null;
+  consent_pdf_path?: string | null;
   branches?: { name: string } | null;
   owners?: { full_name?: string | null; phone?: string | null } | null;
   pets?: {
@@ -52,6 +53,12 @@ export type VisitSummary = {
   pet_id: string;
   started_at: string | null;
   diagnosis: string | null;
+  symptoms?: string | null;
+  treatment_plan?: string | null;
+  status?: string | null;
+  visit_report_pdf_path?: string | null;
+  visit_report_pdf_generated_at?: string | null;
+  visit_report_pdf_source?: string | null;
 };
 
 /** One line from `prescription_items` (portal / visit Rx). */
@@ -82,6 +89,7 @@ export type OwnerVisitReport = {
   started_at: string | null;
   visit_report_pdf_path: string;
   visit_report_pdf_generated_at: string | null;
+  visit_report_pdf_source?: string | null;
   pet_name: string;
 };
 
@@ -94,6 +102,7 @@ export type OwnerVisitSummaryRow = {
   status_label: string | null;
   report_ready: boolean;
   visit_report_pdf_generated_at: string | null;
+  visit_report_pdf_source?: string | null;
 };
 
 export type StaffDoctorOption = {

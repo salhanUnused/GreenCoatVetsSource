@@ -52,7 +52,10 @@ export async function assignUserToClinicAction(formData: FormData) {
     const role = String(formData.get("role") ?? "").trim() as
       | "branch_admin"
       | "doctor"
+      | "junior_doctor"
       | "senior_doctor"
+      | "manager"
+      | "junior"
       | "marketing_editor"
       | "receptionist"
       | "lab_technician"
@@ -92,7 +95,7 @@ export async function assignUserToClinicAction(formData: FormData) {
       p_role: role,
       p_staff_full_name: fullName,
       p_staff_phone: phone,
-      p_working_hours: role === "doctor" || role === "senior_doctor" ? workingHours : null,
+      p_working_hours: role === "doctor" || role === "junior_doctor" || role === "senior_doctor" ? workingHours : null,
     });
     if (error) {
       if (createdUserId) {

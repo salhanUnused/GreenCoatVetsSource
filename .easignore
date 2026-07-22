@@ -1,0 +1,32 @@
+# Base ignores (easignore replaces .gitignore when present)
+node_modules/
+**/node_modules/
+.DS_Store
+.env
+.env.*
+!.env.example
+!**/.env.example
+dist/
+build/
+.next/
+.expo/
+coverage/
+*.log
+.vercel/
+.git/
+
+# Not needed to build the Expo mobile app
+apps/web/
+apps/website/
+apps/api/
+packages/api/
+packages/types/
+packages/ui/
+
+# Large / non-app assets
+**/*.apk
+**/*.aab
+**/*.ipa
+**/logo-source.png
+**/agent-transcripts/
+**/terminals/

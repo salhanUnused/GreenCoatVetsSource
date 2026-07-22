@@ -12,7 +12,10 @@ import { SubmitButton } from "@/components/web/submit-button";
 
 const ASSIGN_ROLES = [
   { value: "doctor", label: "Doctor" },
+  { value: "junior_doctor", label: "Junior doctor" },
   { value: "senior_doctor", label: "Senior doctor" },
+  { value: "manager", label: "Manager" },
+  { value: "junior", label: "Junior" },
   { value: "receptionist", label: "Receptionist" },
   { value: "branch_admin", label: "Branch admin" },
   { value: "marketing_editor", label: "Website editor" },
@@ -129,11 +132,11 @@ export default async function TeamManagementPage({
             />
           </label>
           <label className="flex flex-col gap-0.5 text-[11px]">
-            <span className="font-semibold text-slate-700">Doctor/Senior doctor working hours</span>
+            <span className="font-semibold text-slate-700">Doctor/Junior/Senior doctor working hours</span>
             <input
               name="working_hours"
               className="rounded border border-slate-200 bg-white px-2 py-1.5 text-[12px]"
-              placeholder="Required if role is Doctor or Senior doctor"
+              placeholder="Required if role is Doctor, Junior doctor, or Senior doctor"
             />
           </label>
           <label className="flex items-center gap-2 text-[11px] md:col-span-2 lg:col-span-3">

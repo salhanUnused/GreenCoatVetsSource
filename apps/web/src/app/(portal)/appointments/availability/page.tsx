@@ -17,7 +17,7 @@ export default async function DoctorAvailabilityPage() {
       .from("staff_profiles")
       .select("id, full_name, branch_id")
       .eq("clinic_id", membership.clinic_id)
-      .in("role", ["doctor", "senior_doctor"])
+      .in("role", ["doctor", "junior_doctor", "senior_doctor"])
       .eq("is_active", true)
       .order("full_name"),
     supabase.from("branches").select("id, name").eq("clinic_id", membership.clinic_id).order("name"),

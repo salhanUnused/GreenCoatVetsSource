@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { formatClinicDate } from "@saasclinics/lib";
 import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
 import { ensurePrescriptionForVisit, saveVisitRecord } from "../actions";
@@ -254,7 +254,9 @@ export default async function VisitDetailsPage({
       patientAgeLabel(pet as { date_of_birth?: string | null; age_months?: number | null }),
     ownerName: evaluation?.owner_name ?? (intakeOwnerName || ownerName),
     mobile: ic("contact_phone") || String(owner?.phone ?? ""),
-    date: Number.isNaN(visitDate.getTime()) ? "" : visitDate.toLocaleDateString(),
+    date: Number.isNaN(visitDate.getTime())
+      ? ""
+      : formatClinicDate(visitDate, (clinicRow as { timezone?: string | null } | null)?.timezone),
     species: evaluation?.species_class ?? species,
     gender: evaluation?.patient_gender ?? String(pet?.gender ?? ""),
     ccHp:

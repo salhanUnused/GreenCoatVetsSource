@@ -1,9 +1,11 @@
 import { useState } from "react";
 import {
   DEFAULT_PET_SPECIES_BOOKING_VALUE,
+  formatClinicDateTime,
   formatSpeciesLabel,
   normalizeLegacySpeciesToCanonical,
   PET_SPECIES_BOOKING_OPTIONS,
+  visitReportPdfSourceLabel,
 } from "@saasclinics/lib";
 import * as ImagePicker from "expo-image-picker";
 import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
@@ -17,21 +19,28 @@ import {
   PET_GENDER_OPTIONS,
   type PetGenderValue,
 } from "../../lib/petDemographics";
-import { Pet, VisitSummary } from "../../types/app";
+import { Pet, OwnerPrescription, VisitSummary } from "../../types/app";
 import { PetAvatar } from "../../components/PetAvatar";
 import { OwnerNeonCard } from "../../components/OwnerNeonCard";
 
 export function OwnerPetsScreen({
   pets,
   visitsByPet,
+  prescriptionsByVisit,
+  clinicTimezone,
   refreshing,
   onRefresh,
   onAddPet,
   onUpdatePet,
   onUploadPetPhoto,
+  onOpenVisitReport,
+  onDownloadVisitReport,
+  onOpenPrescriptionPdf,
 }: {
   pets: Pet[];
   visitsByPet: Record<string, VisitSummary[]>;
+  prescriptionsByVisit: Record<string, OwnerPrescription[]>;
+  clinicTimezone?: string | null;
   refreshing: boolean;
   onRefresh: () => void;
   onAddPet: (input: {
@@ -47,6 +56,9 @@ export function OwnerPetsScreen({
     patch: Partial<Pick<Pet, "name" | "species" | "breed" | "gender" | "age_months" | "allergies">>,
   ) => Promise<void>;
   onUploadPetPhoto: (petId: string, uri: string, mimeType?: string, base64?: string | null) => Promise<void>;
+  onOpenVisitReport?: (visitId: string) => Promise<void>;
+  onDownloadVisitReport?: (visitId: string) => Promise<void>;
+  onOpenPrescriptionPdf?: (prescriptionId: string) => Promise<void>;
 }) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
@@ -194,14 +206,55 @@ export function OwnerPetsScreen({
                     <Text style={commonStyles.btnPrimaryText}>Save pet</Text>
                   </Pressable>
 
-                  <Text style={[commonStyles.sectionLabel, { marginTop: 16 }]}>Visit timeline</Text>
+                  <Text style={[commonStyles.sectionLabel, { marginTop: 16 }]}>Medical history</Text>
                   {visits.length ? (
-                    visits.map((v) => (
-                      <View key={v.id} style={styles.timelineRow}>
-                        <Text style={styles.tlDate}>{v.started_at ? new Date(v.started_at).toLocaleDateString() : "—"}</Text>
-                        <Text style={commonStyles.muted}>{v.diagnosis ?? "Visit"}</Text>
-                      </View>
-                    ))
+                    visits.map((v) => {
+                      const rxForVisit = prescriptionsByVisit[v.id] ?? [];
+                      const pdfLabel = visitReportPdfSourceLabel(v.visit_report_pdf_source);
+                      const hasPdf = Boolean(v.visit_report_pdf_path?.trim());
+                      return (
+                        <View key={v.id} style={styles.timelineRow}>
+                          <Text style={styles.tlDate}>
+                            {v.started_at ? formatClinicDateTime(v.started_at, clinicTimezone) : "—"}
+                          </Text>
+                          <Text style={styles.tlDiagnosis}>{v.diagnosis?.trim() || "Visit"}</Text>
+                          {v.symptoms?.trim() ? (
+                            <Text style={commonStyles.muted}>Symptoms: {v.symptoms.trim()}</Text>
+                          ) : null}
+                          {v.treatment_plan?.trim() ? (
+                            <Text style={commonStyles.muted}>Plan: {v.treatment_plan.trim()}</Text>
+                          ) : null}
+                          {rxForVisit.length ? (
+                            <View style={styles.rxMini}>
+                              {rxForVisit.map((rx) => (
+                                <View key={rx.id} style={styles.rxMiniRow}>
+                                  <Text style={commonStyles.muted}>
+                                    Rx · {formatClinicDateTime(rx.issued_at, clinicTimezone)}
+                                  </Text>
+                                  {onOpenPrescriptionPdf && rx.pdf_url?.trim() ? (
+                                    <Pressable style={styles.miniBtn} onPress={() => void onOpenPrescriptionPdf(rx.id)}>
+                                      <Text style={styles.miniBtnText}>Rx PDF</Text>
+                                    </Pressable>
+                                  ) : null}
+                                </View>
+                              ))}
+                            </View>
+                          ) : null}
+                          {hasPdf && onOpenVisitReport ? (
+                            <View style={styles.pdfRow}>
+                              <Pressable style={styles.miniBtnPrimary} onPress={() => void onOpenVisitReport(v.id)}>
+                                <Text style={styles.miniBtnPrimaryText}>Open {pdfLabel}</Text>
+                              </Pressable>
+                              {onDownloadVisitReport ? (
+                                <Pressable style={styles.miniBtn} onPress={() => void onDownloadVisitReport(v.id)}>
+                                  <Text style={styles.miniBtnText}>Download</Text>
+                                </Pressable>
+                              ) : null}
+                            </View>
+                          ) : null}
+                        </View>
+                      );
+                    })
                   ) : (
                     <Text style={commonStyles.emptyState}>No visits recorded yet.</Text>
                   )}
@@ -307,8 +360,28 @@ const styles = StyleSheet.create({
   petHeader: { flexDirection: "row", alignItems: "center", gap: 8 },
   petName: { fontWeight: "800", fontSize: 16, color: theme.onSurface },
   detail: { marginTop: 12 },
-  timelineRow: { paddingVertical: 8, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.outlineVariant },
+  timelineRow: { paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.outlineVariant, gap: 4 },
   tlDate: { fontWeight: "700", color: theme.onSurface, marginBottom: 2 },
+  tlDiagnosis: { fontWeight: "600", color: theme.onSurface },
+  pdfRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 },
+  rxMini: { marginTop: 4, gap: 4 },
+  rxMiniRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
+  miniBtn: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: theme.outlineVariant,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: theme.surfaceContainer,
+  },
+  miniBtnText: { fontSize: 11, fontWeight: "700", color: theme.onSurface },
+  miniBtnPrimary: {
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: theme.primary,
+  },
+  miniBtnPrimaryText: { fontSize: 11, fontWeight: "800", color: theme.onPrimary },
   addHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 },
   speciesChipWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   speciesChip: {

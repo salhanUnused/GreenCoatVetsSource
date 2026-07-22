@@ -1,4 +1,5 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
+import { formatClinicDateTime } from "@saasclinics/lib";
 
 const PAGE_WIDTH = 595;
 const PAGE_HEIGHT = 842;
@@ -63,6 +64,7 @@ export type BookingConsentPdfInput = {
   documentTitle?: string;
   documentSubtitle?: string;
   footerLabel?: string;
+  clinicTimezone?: string | null;
 };
 
 export async function buildBookingConsentPdf(input: BookingConsentPdfInput): Promise<Uint8Array> {
@@ -104,12 +106,12 @@ export async function buildBookingConsentPdf(input: BookingConsentPdfInput): Pro
   drawLabelValue("Pet owner", input.ownerName);
   drawLabelValue("Patient (pet)", `${input.petName}${input.petSpecies ? ` · ${input.petSpecies}` : ""}`);
   if (input.appointmentAtIso) {
-    drawLabelValue("Appointment time", new Date(input.appointmentAtIso).toLocaleString());
+    drawLabelValue("Appointment time", formatClinicDateTime(input.appointmentAtIso, input.clinicTimezone));
   }
   if (input.chiefComplaint?.trim()) {
     drawLabelValue("Chief complaint", input.chiefComplaint.trim());
   }
-  drawLabelValue("Signed on", new Date(input.signedAtIso).toLocaleString());
+  drawLabelValue("Signed on", formatClinicDateTime(input.signedAtIso, input.clinicTimezone));
 
   y -= 4;
   page.drawLine({

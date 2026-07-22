@@ -73,7 +73,7 @@ export async function createWalkInGuestPatient(formData: FormData) {
   const { clinic_id } = await getActiveMembership();
   const supabase = createClient();
 
-  const { data: clinic } = await supabase.from("clinics").select("name").eq("id", clinic_id).maybeSingle();
+  const { data: clinic } = await supabase.from("clinics").select("name, timezone").eq("id", clinic_id).maybeSingle();
   const clinicName = (clinic?.name as string | undefined)?.trim() || "Clinic";
 
   const { data: ownerRow, error: oErr } = await supabase
@@ -163,6 +163,7 @@ export async function createWalkInGuestPatient(formData: FormData) {
         documentTitle: "Walk-in visit consent",
         documentSubtitle: "Signed consent form",
         footerLabel: `${clinicName} · Walk-in consent`,
+        clinicTimezone: (clinic as { timezone?: string | null } | null)?.timezone,
       });
       const path = `${clinic_id}/consent/${appointmentId}.pdf`;
       const { error: upErr } = await supabase.storage.from("medical-files").upload(path, pdfBytes, {

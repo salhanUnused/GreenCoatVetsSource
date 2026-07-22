@@ -1,5 +1,6 @@
 import * as Print from "expo-print";
 import * as FileSystem from "expo-file-system/legacy";
+import { formatClinicDateTime } from "@saasclinics/lib";
 import { supabase } from "./supabase";
 
 function bytesFromBase64(base64: string) {
@@ -45,7 +46,7 @@ export async function generateAppointmentVisitPdf(
   try {
     const { data: visit } = await supabase
       .from("visits")
-      .select("id, symptoms, diagnosis, treatment_plan, follow_up_at, branch_id, pet_id")
+      .select("id, symptoms, diagnosis, treatment_plan, follow_up_at, branch_id, pet_id, started_at, created_at")
       .eq("appointment_id", appointmentId)
       .eq("clinic_id", clinicId)
       .limit(1)
@@ -92,7 +93,7 @@ export async function generateAppointmentVisitPdf(
     if (!hasData) return { status: "no_data" };
 
     const [{ data: clinicRow }, { data: doctorRow }] = await Promise.all([
-      supabase.from("clinics").select("name, image_url").eq("id", clinicId).maybeSingle(),
+      supabase.from("clinics").select("name, image_url, timezone").eq("id", clinicId).maybeSingle(),
       appt?.doctor_id
         ? supabase.from("staff_profiles").select("full_name").eq("id", appt.doctor_id).maybeSingle()
         : Promise.resolve({ data: null }),
@@ -100,7 +101,12 @@ export async function generateAppointmentVisitPdf(
 
     const clinicName = (clinicRow as { name?: string } | null)?.name ?? "Clinic";
     const clinicLogoUrl = (clinicRow as { image_url?: string | null } | null)?.image_url ?? null;
+    const clinicTimezone = (clinicRow as { timezone?: string | null } | null)?.timezone ?? null;
     const doctorName = (doctorRow as { full_name?: string } | null)?.full_name ?? "Doctor";
+    const visitWhen = formatClinicDateTime(
+      (visit.started_at as string | null) ?? (visit.created_at as string | null),
+      clinicTimezone,
+    );
 
     const petRaw = appt?.pets as { name?: string; breed?: string | null } | Array<{ name?: string; breed?: string | null }> | null | undefined;
     const pet = Array.isArray(petRaw) ? petRaw[0] : petRaw;
@@ -140,7 +146,7 @@ export async function generateAppointmentVisitPdf(
         </div>
       </div>
       <div style="padding:20px 22px">
-        <p style="margin:0 0 8px"><b>Issued:</b> ${escHtml(new Date().toLocaleString())}</p>
+        <p style="margin:0 0 8px"><b>Visit date:</b> ${escHtml(visitWhen)}</p>
         <p style="margin:0 0 8px"><b>Doctor:</b> ${escHtml(doctorName)}</p>
         <p style="margin:0 0 8px"><b>Patient:</b> ${escHtml(petName)} (${escHtml(petBreed)})</p>
         <p style="margin:0 0 14px"><b>Owner:</b> ${escHtml(ownerName)} ${ownerPhone ? `(${escHtml(ownerPhone)})` : ""}</p>

@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { formatClinicDateTime } from "@saasclinics/lib";
 import { createHostingerTransport, getHostingerFromAddress } from "@/lib/email/hostinger-mail";
 import { renderBrandedEmail } from "@/lib/email/render-branded-email";
 import { fetchClinicLogoBytesForPdf } from "@/lib/invoicing/fetch-clinic-logo";
@@ -14,6 +15,30 @@ import { recognizeHandwrittenRegionCore } from "@/lib/visits/recognize-handwritt
 import { assertVisitReportAccess } from "@/lib/visits/visit-report-access";
 
 const BUCKET = "medical-files";
+
+async function visitSheetFooterLabel(
+  supabase: ReturnType<typeof createClient>,
+  visit: {
+    clinic_id: string;
+    started_at?: string | null;
+    created_at?: string | null;
+    appointment_id?: string | null;
+  },
+  sheetName: string,
+): Promise<string> {
+  const { data: clinic } = await supabase.from("clinics").select("timezone").eq("id", visit.clinic_id).maybeSingle();
+  let when = visit.started_at ?? visit.created_at ?? null;
+  if (!when && visit.appointment_id) {
+    const { data: appt } = await supabase
+      .from("appointments")
+      .select("starts_at")
+      .eq("id", visit.appointment_id)
+      .maybeSingle();
+    when = (appt?.starts_at as string | null) ?? null;
+  }
+  const label = formatClinicDateTime(when, clinic?.timezone);
+  return `${sheetName} · Visit ${label}`;
+}
 
 export async function recognizeHandwrittenRegionAction(
   input: Parameters<typeof recognizeHandwrittenRegionCore>[0],
@@ -132,7 +157,7 @@ export async function saveHandwrittenVisitPdfAction(formData: FormData): Promise
 
     const { data: visit, error: visitError } = await supabase
       .from("visits")
-      .select("id, clinic_id, pet_id, branch_id")
+      .select("id, clinic_id, pet_id, branch_id, started_at, created_at, appointment_id")
       .eq("id", visitId)
       .single();
 
@@ -145,7 +170,7 @@ export async function saveHandwrittenVisitPdfAction(formData: FormData): Promise
     const logoBytes = await fetchClinicLogoBytesForPdf(supabase, (brandingRow?.logo_url as string | null | undefined) ?? null);
     const pdfBytes = await buildHandwrittenCanvasPdfBytes({
       imageBytes: uploadedImageBytes,
-      footerText: `Handwritten visit sheet saved ${new Date().toLocaleString()}.`,
+      footerText: await visitSheetFooterLabel(supabase, visit, "Digital visit sheet"),
       logoBytes,
     });
     const path = `${visit.clinic_id}/pets/${visit.pet_id}/visits/${visitId}/visit-report-handwritten.pdf`;
@@ -219,7 +244,7 @@ export async function saveVisitPhotoSheetPdfAction(formData: FormData): Promise<
 
     const { data: visit, error: visitError } = await supabase
       .from("visits")
-      .select("id, clinic_id, pet_id, branch_id")
+      .select("id, clinic_id, pet_id, branch_id, started_at, created_at, appointment_id")
       .eq("id", visitId)
       .single();
 
@@ -228,16 +253,11 @@ export async function saveVisitPhotoSheetPdfAction(formData: FormData): Promise<
     }
 
     const uploadedImageBytes = await readHandwrittenImageUpload(formData);
-    const capturedAtRaw = String(formData.get("captured_at") ?? "").trim();
-    const capturedAt = capturedAtRaw ? new Date(capturedAtRaw) : new Date();
-    const scannedLabel = Number.isNaN(capturedAt.getTime())
-      ? new Date().toLocaleString()
-      : capturedAt.toLocaleString();
     const { data: brandingRow } = await supabase.from("platform_branding").select("logo_url").eq("id", "default").maybeSingle();
     const logoBytes = await fetchClinicLogoBytesForPdf(supabase, (brandingRow?.logo_url as string | null | undefined) ?? null);
     const pdfBytes = await buildHandwrittenCanvasPdfBytes({
       imageBytes: uploadedImageBytes,
-      footerText: `Photo visit sheet captured ${scannedLabel}.`,
+      footerText: await visitSheetFooterLabel(supabase, visit, "Photo visit sheet"),
       logoBytes,
     });
     const path = `${visit.clinic_id}/pets/${visit.pet_id}/visits/${visitId}/visit-report-photo.pdf`;

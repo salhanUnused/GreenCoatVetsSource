@@ -325,7 +325,7 @@ export default async function BookAppointmentPage({
                         required
                         className="mt-1 h-4 w-4 rounded border-outline-variant"
                       />
-                      <span>{APPOINTMENT_BOOKING_CONSENT_TEXT}</span>
+                      <span className="whitespace-pre-line">{APPOINTMENT_BOOKING_CONSENT_TEXT}</span>
                     </label>
                     <div className="mt-4">
                       <ConsentSignatureField />
@@ -498,7 +498,7 @@ export default async function BookAppointmentPage({
                         required
                         className="mt-1 h-4 w-4 rounded border-outline-variant"
                       />
-                      <span>{APPOINTMENT_BOOKING_CONSENT_TEXT}</span>
+                      <span className="whitespace-pre-line">{APPOINTMENT_BOOKING_CONSENT_TEXT}</span>
                     </label>
                     <div className="mt-4">
                       <ConsentSignatureField />

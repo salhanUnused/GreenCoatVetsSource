@@ -22,8 +22,19 @@ export async function uploadBookingConsentPdf(params: {
   consentText?: string;
   documentTitle?: string;
   documentSubtitle?: string;
+  clinicTimezone?: string | null;
 }): Promise<{ path: string; buffer: Buffer; signedAtIso: string } | null> {
   if (!isSignaturePngDataUrl(params.signaturePngBase64)) return null;
+
+  let clinicTimezone = params.clinicTimezone ?? null;
+  if (!clinicTimezone) {
+    const { data: clinicRow } = await params.supabase
+      .from("clinics")
+      .select("timezone")
+      .eq("id", params.clinicId)
+      .maybeSingle();
+    clinicTimezone = (clinicRow as { timezone?: string | null } | null)?.timezone ?? null;
+  }
 
   const signedAtIso = new Date().toISOString();
   const pdfBytes = await buildBookingConsentPdf({
@@ -39,6 +50,7 @@ export async function uploadBookingConsentPdf(params: {
     documentTitle: params.documentTitle ?? "Appointment booking consent",
     documentSubtitle: params.documentSubtitle ?? "Signed consent form",
     footerLabel: `${params.clinicName} · Booking consent`,
+    clinicTimezone: clinicTimezone,
   });
 
   const path = `${params.clinicId}/consent/${params.appointmentId}.pdf`;

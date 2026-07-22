@@ -1,4 +1,5 @@
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import { formatClinicDateTime, visitReportPdfSourceLabel } from "@saasclinics/lib";
 import { formatPrescriptionItemLine } from "../lib/formatPrescription";
 import { OwnerNeonCard } from "../components/OwnerNeonCard";
 import { commonStyles } from "../theme/commonStyles";
@@ -17,9 +18,11 @@ export function OwnerHealthScreen({
   vaccinations,
   attachments,
   visitReports,
+  clinicTimezone,
   onOpenAttachment,
   onOpenPrescriptionPdf,
   onOpenVisitReport,
+  onDownloadVisitReport,
   refreshing,
   onRefresh,
 }: {
@@ -32,9 +35,11 @@ export function OwnerHealthScreen({
     visit_id: string | null;
   }>;
   visitReports: OwnerVisitReport[];
+  clinicTimezone?: string | null;
   onOpenAttachment: (attachmentId: string) => Promise<void>;
   onOpenPrescriptionPdf: (prescriptionId: string) => Promise<void>;
   onOpenVisitReport: (visitId: string) => Promise<void>;
+  onDownloadVisitReport?: (visitId: string) => Promise<void>;
   refreshing: boolean;
   onRefresh: () => void;
 }) {
@@ -59,7 +64,7 @@ export function OwnerHealthScreen({
               <View style={styles.rxHeader}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.itemTitle}>
-                    {new Date(prescription.issued_at).toLocaleDateString()}
+                    {formatClinicDateTime(prescription.issued_at, clinicTimezone)}
                     {prescription.pets?.name ? ` · ${prescription.pets.name}` : ""}
                   </Text>
                   {prescription.notes?.trim() ? (
@@ -111,22 +116,31 @@ export function OwnerHealthScreen({
 
       <OwnerNeonCard>
         <Text style={commonStyles.cardTitle}>Visit reports</Text>
-        {visitReports.map((vr, i) => (
+        {visitReports.map((vr, i) => {
+          const pdfLabel = visitReportPdfSourceLabel(vr.visit_report_pdf_source);
+          return (
           <View style={[styles.fileRow, i === visitReports.length - 1 && styles.fileRowLast]} key={vr.id}>
             <View style={{ flex: 1 }}>
               <Text style={styles.itemTitle}>{vr.pet_name}</Text>
               <Text style={commonStyles.muted}>
-                {vr.started_at ? new Date(vr.started_at).toLocaleString() : "—"}
+                {vr.started_at ? formatClinicDateTime(vr.started_at, clinicTimezone) : "—"}
                 {vr.visit_report_pdf_generated_at
-                  ? ` · PDF saved ${new Date(vr.visit_report_pdf_generated_at).toLocaleDateString()}`
-                  : ""}
+                  ? ` · ${pdfLabel} saved ${formatClinicDateTime(vr.visit_report_pdf_generated_at, clinicTimezone)}`
+                  : ` · ${pdfLabel}`}
               </Text>
             </View>
-            <Pressable style={commonStyles.btnPrimary} onPress={() => onOpenVisitReport(vr.id)}>
-              <Text style={commonStyles.btnPrimaryText}>View PDF</Text>
-            </Pressable>
+            <View style={styles.pdfActions}>
+              <Pressable style={commonStyles.btnPrimary} onPress={() => onOpenVisitReport(vr.id)}>
+                <Text style={commonStyles.btnPrimaryText}>Open</Text>
+              </Pressable>
+              {onDownloadVisitReport ? (
+                <Pressable style={commonStyles.btnOutline} onPress={() => void onDownloadVisitReport(vr.id)}>
+                  <Text style={commonStyles.btnOutlineText}>Save</Text>
+                </Pressable>
+              ) : null}
+            </View>
           </View>
-        ))}
+        );})}
         {!visitReports.length ? <Text style={commonStyles.emptyState}>No visit reports yet.</Text> : null}
       </OwnerNeonCard>
 
@@ -137,7 +151,7 @@ export function OwnerHealthScreen({
             <View style={{ flex: 1 }}>
               <Text style={styles.itemTitle}>{attachment.file_name ?? "File"}</Text>
               <Text style={commonStyles.muted}>
-                {new Date(attachment.created_at).toLocaleString()}
+                {formatClinicDateTime(attachment.created_at, clinicTimezone)}
                 {attachment.visit_id ? ` · Visit ${attachment.visit_id.slice(0, 8)}…` : ""}
               </Text>
             </View>
@@ -172,5 +186,6 @@ const styles = StyleSheet.create({
     borderBottomColor: theme.outlineVariant,
   },
   fileRowLast: { borderBottomWidth: 0 },
+  pdfActions: { flexDirection: "row", gap: 8, alignItems: "center" },
   disabledBtn: { opacity: 0.4 },
 });

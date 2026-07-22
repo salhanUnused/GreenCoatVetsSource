@@ -16,6 +16,7 @@ import {
   assertAppointmentStartsInFuture,
   DEFAULT_PET_SPECIES_BOOKING_VALUE,
   normalizeLegacySpeciesToCanonical,
+  visitReportPdfSourceLabel,
 } from "@saasclinics/lib";
 import type { BookingDoctor } from "./src/components/BookingDoctorSlotPicker";
 import {
@@ -71,7 +72,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { AppAmbientBackground } from "./src/components/AppAmbientBackground";
 import { PawCircularLoader } from "./src/components/PawCircularLoader";
 import { loadAppBranding, type AppBranding } from "./src/lib/app-branding";
-import { promptOpenOrSharePdf } from "./src/lib/open-or-share-document";
+import { promptOpenOrSharePdf, sharePdfFromUrl, signedPdfUrl } from "./src/lib/open-or-share-document";
 import { createSessionFromUrl, isOAuthCallbackUrl } from "./src/lib/google-auth";
 import { getPetOwnerProfileStatus, syncWebsiteAccountForMobile } from "./src/lib/owner-profile";
 import { notifyAppointmentBookingEmails } from "./src/lib/website-api";
@@ -216,6 +217,7 @@ function MobileHome({ onSignOut, userEmail }: { onSignOut: () => void; userEmail
   const [ownerVisitReports, setOwnerVisitReports] = useState<OwnerVisitReport[]>([]);
   const [ownerVisitSummaries, setOwnerVisitSummaries] = useState<OwnerVisitSummaryRow[]>([]);
   const [ownerReportsEnabled, setOwnerReportsEnabled] = useState(true);
+  const [clinicTimezone, setClinicTimezone] = useState<string | null>(null);
   const [downloadingAllReports, setDownloadingAllReports] = useState(false);
   const [vaccinations, setVaccinations] = useState<
     Array<{ id: string; vaccine_name: string; due_on: string | null; status: string | null; pets?: { name?: string | null } | null }>
@@ -273,7 +275,7 @@ function MobileHome({ onSignOut, userEmail }: { onSignOut: () => void; userEmail
   });
 
   const appointmentSelect =
-    "id, status, starts_at, appointment_type, branch_id, pet_id, owner_id, doctor_id, branches(name), owners(full_name, phone), pets(name, species, photo_url, breed, age_months, date_of_birth, allergies, chronic_diseases)";
+    "id, status, starts_at, appointment_type, branch_id, pet_id, owner_id, doctor_id, consent_pdf_path, branches(name), owners(full_name, phone), pets(name, species, photo_url, breed, age_months, date_of_birth, allergies, chronic_diseases)";
 
   async function hydratePetImageUrls(rows: Pet[]) {
     if (!rows.length) return rows;
@@ -595,7 +597,9 @@ function MobileHome({ onSignOut, userEmail }: { onSignOut: () => void; userEmail
                 .limit(30),
               supabase
                 .from("visits")
-                .select("id, pet_id, started_at, diagnosis, visit_report_pdf_path, visit_report_pdf_generated_at, pets(name)")
+                .select(
+                  "id, pet_id, started_at, diagnosis, symptoms, treatment_plan, status, visit_report_pdf_path, visit_report_pdf_generated_at, visit_report_pdf_source, pets(name)",
+                )
                 .eq("clinic_id", membershipData.clinic_id)
                 .in("pet_id", petIds)
                 .order("started_at", { ascending: false })
@@ -649,6 +653,7 @@ function MobileHome({ onSignOut, userEmail }: { onSignOut: () => void; userEmail
             VisitSummary & {
               visit_report_pdf_path?: string | null;
               visit_report_pdf_generated_at?: string | null;
+              visit_report_pdf_source?: string | null;
               pets?: { name?: string | null } | { name?: string | null }[] | null;
             }
           >;
@@ -658,7 +663,13 @@ function MobileHome({ onSignOut, userEmail }: { onSignOut: () => void; userEmail
               pet_id: v.pet_id,
               started_at: v.started_at,
               diagnosis: v.diagnosis,
-            }))
+              symptoms: v.symptoms ?? null,
+              treatment_plan: v.treatment_plan ?? null,
+              status: v.status ?? null,
+              visit_report_pdf_path: v.visit_report_pdf_path ?? null,
+              visit_report_pdf_generated_at: v.visit_report_pdf_generated_at ?? null,
+              visit_report_pdf_source: v.visit_report_pdf_source ?? null,
+            })),
           );
           setOwnerVisitReports(
             vRows
@@ -672,9 +683,10 @@ function MobileHome({ onSignOut, userEmail }: { onSignOut: () => void; userEmail
                   started_at: v.started_at,
                   visit_report_pdf_path: v.visit_report_pdf_path as string,
                   visit_report_pdf_generated_at: v.visit_report_pdf_generated_at ?? null,
+                  visit_report_pdf_source: v.visit_report_pdf_source ?? null,
                   pet_name: pet?.name?.trim() || "Pet",
                 };
-              })
+              }),
           );
         } else {
           setVaccinations([]);
@@ -687,7 +699,7 @@ function MobileHome({ onSignOut, userEmail }: { onSignOut: () => void; userEmail
         const [{ data: clinicRow }, { data: summaryRows }] = await Promise.all([
           supabase
             .from("clinics")
-            .select("website_owner_visit_reports_enabled")
+            .select("website_owner_visit_reports_enabled, timezone")
             .eq("id", membershipData.clinic_id)
             .maybeSingle(),
           supabase.rpc("get_owner_portal_visit_summaries", {
@@ -699,6 +711,7 @@ function MobileHome({ onSignOut, userEmail }: { onSignOut: () => void; userEmail
           (clinicRow as { website_owner_visit_reports_enabled?: boolean | null } | null)?.website_owner_visit_reports_enabled ??
             true,
         );
+        setClinicTimezone((clinicRow as { timezone?: string | null } | null)?.timezone ?? null);
         const summaryList = (summaryRows ?? []) as Array<{
           id: string;
           pet_name: string;
@@ -707,21 +720,23 @@ function MobileHome({ onSignOut, userEmail }: { onSignOut: () => void; userEmail
           status_label: string | null;
         }>;
         const summaryIds = summaryList.map((row) => row.id);
-        const pdfMap = new Map<string, { generated: string | null; path: string | null }>();
+        const pdfMap = new Map<string, { generated: string | null; path: string | null; source: string | null }>();
         if (summaryIds.length) {
           const { data: pdfRows } = await supabase
             .from("visits")
-            .select("id, visit_report_pdf_path, visit_report_pdf_generated_at")
+            .select("id, visit_report_pdf_path, visit_report_pdf_generated_at, visit_report_pdf_source")
             .eq("clinic_id", membershipData.clinic_id)
             .in("id", summaryIds);
           for (const row of (pdfRows ?? []) as Array<{
             id: string;
             visit_report_pdf_path: string | null;
             visit_report_pdf_generated_at: string | null;
+            visit_report_pdf_source: string | null;
           }>) {
             pdfMap.set(row.id, {
               path: row.visit_report_pdf_path,
               generated: row.visit_report_pdf_generated_at,
+              source: row.visit_report_pdf_source,
             });
           }
         }
@@ -738,6 +753,7 @@ function MobileHome({ onSignOut, userEmail }: { onSignOut: () => void; userEmail
               status_label: row.status_label,
               report_ready: hasPath && hasGenerated,
               visit_report_pdf_generated_at: pdf?.generated ?? null,
+              visit_report_pdf_source: pdf?.source ?? null,
             };
           }),
         );
@@ -760,7 +776,7 @@ function MobileHome({ onSignOut, userEmail }: { onSignOut: () => void; userEmail
         .from("staff_profiles")
         .select("id, full_name")
         .eq("clinic_id", membershipData.clinic_id)
-        .in("role", ["doctor", "senior_doctor"])
+        .in("role", ["doctor", "junior_doctor", "senior_doctor"])
         .eq("is_active", true)
         .order("full_name", { ascending: true });
       setDoctors((doctorList as StaffDoctorOption[]) ?? []);
@@ -919,7 +935,7 @@ function MobileHome({ onSignOut, userEmail }: { onSignOut: () => void; userEmail
         .select("id")
         .eq("clinic_id", membershipData.clinic_id)
         .eq("user_id", user.id)
-        .in("role", ["doctor", "senior_doctor"])
+        .in("role", ["doctor", "junior_doctor", "senior_doctor"])
         .eq("is_active", true)
         .limit(1)
         .maybeSingle();
@@ -967,7 +983,7 @@ function MobileHome({ onSignOut, userEmail }: { onSignOut: () => void; userEmail
         .from("staff_profiles")
         .select("id, full_name")
         .eq("clinic_id", membershipData.clinic_id)
-        .in("role", ["doctor", "senior_doctor"])
+        .in("role", ["doctor", "junior_doctor", "senior_doctor"])
         .eq("is_active", true)
         .order("full_name", { ascending: true });
       setDoctors((doctorList as StaffDoctorOption[]) ?? []);
@@ -1666,37 +1682,98 @@ function MobileHome({ onSignOut, userEmail }: { onSignOut: () => void; userEmail
     await promptOpenOrSharePdf(data.signedUrl, `prescription-${prescriptionId}`);
   }
 
-  async function onOpenVisitReport(visitId: string) {
-    if (!membership?.clinic_id) return;
+  async function resolveVisitReportPath(visitId: string): Promise<string | null> {
+    if (!membership?.clinic_id) return null;
     const row = ownerVisitReports.find((v) => v.id === visitId);
     let path: string | null | undefined = row?.visit_report_pdf_path;
     if (!path) {
       const { data, error } = await supabase
         .from("visits")
-        .select("visit_report_pdf_path")
+        .select("visit_report_pdf_path, visit_report_pdf_source")
         .eq("id", visitId)
         .eq("clinic_id", membership.clinic_id)
         .maybeSingle();
-      if (error || !data?.visit_report_pdf_path) {
-        Alert.alert("No report", "Visit report PDF is not available yet.");
-        return;
-      }
+      if (error || !data?.visit_report_pdf_path) return null;
       path = data.visit_report_pdf_path;
     }
-    if (!path?.trim()) {
+    return path?.trim() ? path : null;
+  }
+
+  function visitPdfTitle(visitId: string, source?: string | null) {
+    const label = visitReportPdfSourceLabel(source);
+    const row = ownerVisitReports.find((v) => v.id === visitId);
+    const pet = row?.pet_name?.trim();
+    return pet ? `${label} — ${pet}` : label;
+  }
+
+  async function onOpenVisitReport(visitId: string) {
+    const path = await resolveVisitReportPath(visitId);
+    if (!path) {
       Alert.alert("No report", "Visit report PDF is not available yet.");
       return;
     }
-    if (path.startsWith("http://") || path.startsWith("https://")) {
-      await promptOpenOrSharePdf(path, `visit-report-${visitId}`);
+    const row = ownerVisitReports.find((v) => v.id === visitId);
+    const title = visitPdfTitle(visitId, row?.visit_report_pdf_source);
+    const url = await signedPdfUrl(path);
+    await promptOpenOrSharePdf(url, title);
+  }
+
+  async function onDownloadVisitReport(visitId: string) {
+    const path = await resolveVisitReportPath(visitId);
+    if (!path) {
+      Alert.alert("No report", "Visit report PDF is not available yet.");
       return;
     }
-    const { data, error } = await supabase.storage.from("medical-files").createSignedUrl(path, 60 * 20);
-    if (error || !data?.signedUrl) {
-      Alert.alert("Unable to open PDF", error?.message ?? "No URL generated");
+    const row = ownerVisitReports.find((v) => v.id === visitId);
+    const title = visitPdfTitle(visitId, row?.visit_report_pdf_source);
+    const url = await signedPdfUrl(path);
+    await sharePdfFromUrl(url, `${title}.pdf`);
+  }
+
+  async function onOpenConsentPdf(appointmentId: string) {
+    if (!membership?.clinic_id) return;
+    const appt = appointments.find((a) => a.id === appointmentId);
+    let path = appt?.consent_pdf_path ?? null;
+    if (!path) {
+      const { data, error } = await supabase
+        .from("appointments")
+        .select("consent_pdf_path")
+        .eq("id", appointmentId)
+        .eq("clinic_id", membership.clinic_id)
+        .maybeSingle();
+      if (error || !data?.consent_pdf_path) {
+        Alert.alert("No consent PDF", "Signed consent form is not available for this appointment.");
+        return;
+      }
+      path = data.consent_pdf_path;
+    }
+    if (!path?.trim()) {
+      Alert.alert("No consent PDF", "Signed consent form is not available for this appointment.");
       return;
     }
-    await promptOpenOrSharePdf(data.signedUrl, `visit-report-${visitId}`);
+    const url = await signedPdfUrl(path);
+    await promptOpenOrSharePdf(url, "Booking consent");
+  }
+
+  async function onDownloadConsentPdf(appointmentId: string) {
+    if (!membership?.clinic_id) return;
+    const appt = appointments.find((a) => a.id === appointmentId);
+    let path = appt?.consent_pdf_path ?? null;
+    if (!path) {
+      const { data } = await supabase
+        .from("appointments")
+        .select("consent_pdf_path")
+        .eq("id", appointmentId)
+        .eq("clinic_id", membership.clinic_id)
+        .maybeSingle();
+      path = data?.consent_pdf_path ?? null;
+    }
+    if (!path?.trim()) {
+      Alert.alert("No consent PDF", "Signed consent form is not available for this appointment.");
+      return;
+    }
+    const url = await signedPdfUrl(path);
+    await sharePdfFromUrl(url, `booking-consent-${appointmentId}.pdf`);
   }
 
   async function onDownloadAllVisitReports() {
@@ -1708,7 +1785,7 @@ function MobileHome({ onSignOut, userEmail }: { onSignOut: () => void; userEmail
     setDownloadingAllReports(true);
     try {
       for (const row of ready) {
-        await onOpenVisitReport(row.id);
+        await onDownloadVisitReport(row.id);
       }
     } finally {
       setDownloadingAllReports(false);
@@ -1724,7 +1801,7 @@ function MobileHome({ onSignOut, userEmail }: { onSignOut: () => void; userEmail
     setDownloadingAdminReports(true);
     try {
       for (const row of ready) {
-        await onOpenVisitReport(row.id);
+        await onDownloadVisitReport(row.id);
       }
     } finally {
       setDownloadingAdminReports(false);
@@ -2152,6 +2229,15 @@ function MobileHome({ onSignOut, userEmail }: { onSignOut: () => void; userEmail
     }, {});
   }, [visitSummaries]);
 
+  const prescriptionsByVisit = useMemo(() => {
+    return prescriptions.reduce<Record<string, OwnerPrescription[]>>((acc, rx) => {
+      if (!rx.visit_id) return acc;
+      if (!acc[rx.visit_id]) acc[rx.visit_id] = [];
+      acc[rx.visit_id].push(rx);
+      return acc;
+    }, {});
+  }, [prescriptions]);
+
   const role = membership?.role?.toLowerCase();
 
   return (
@@ -2296,11 +2382,16 @@ function MobileHome({ onSignOut, userEmail }: { onSignOut: () => void; userEmail
                     <OwnerPetsScreen
                       pets={pets}
                       visitsByPet={visitsByPet}
+                      prescriptionsByVisit={prescriptionsByVisit}
+                      clinicTimezone={clinicTimezone}
                       refreshing={refreshing}
                       onRefresh={refreshData}
                       onAddPet={onAddPet}
                       onUpdatePet={onUpdatePet}
                       onUploadPetPhoto={onUploadPetPhoto}
+                      onOpenVisitReport={onOpenVisitReport}
+                      onDownloadVisitReport={onDownloadVisitReport}
+                      onOpenPrescriptionPdf={onOpenPrescriptionPdf}
                     />
                   )}
                 </Tab.Screen>
@@ -2329,10 +2420,13 @@ function MobileHome({ onSignOut, userEmail }: { onSignOut: () => void; userEmail
                       }
                       ownerPhone={ownerPhone}
                       ownerEmail={ownerEmail}
+                      clinicTimezone={clinicTimezone}
                       onCreate={onCreateOwnerAppointment}
                       onCancelAppointment={onCancelOwnerAppointment}
                       onRequestTimeChange={onRequestOwnerAppointmentTimeChange}
                       timeChangeRequests={ownerTimeChangeRequests}
+                      onOpenConsentPdf={onOpenConsentPdf}
+                      onDownloadConsentPdf={onDownloadConsentPdf}
                     />
                   )}
                 </Tab.Screen>
@@ -2348,9 +2442,11 @@ function MobileHome({ onSignOut, userEmail }: { onSignOut: () => void; userEmail
                       vaccinations={vaccinations}
                       attachments={attachments}
                       visitReports={ownerVisitReports}
+                      clinicTimezone={clinicTimezone}
                       onOpenAttachment={onOpenAttachment}
                       onOpenPrescriptionPdf={onOpenPrescriptionPdf}
                       onOpenVisitReport={onOpenVisitReport}
+                      onDownloadVisitReport={onDownloadVisitReport}
                       refreshing={refreshing}
                       onRefresh={refreshData}
                     />
@@ -2366,7 +2462,9 @@ function MobileHome({ onSignOut, userEmail }: { onSignOut: () => void; userEmail
                     <OwnerReportsScreen
                       reportsEnabled={ownerReportsEnabled}
                       visitSummaries={ownerVisitSummaries}
+                      clinicTimezone={clinicTimezone}
                       onOpenVisitReport={onOpenVisitReport}
+                      onDownloadVisitReport={onDownloadVisitReport}
                       onDownloadAll={onDownloadAllVisitReports}
                       downloadingAll={downloadingAllReports}
                       refreshing={refreshing}
@@ -2447,7 +2545,7 @@ function MobileHome({ onSignOut, userEmail }: { onSignOut: () => void; userEmail
                     membership?.clinic_id ? (
                       <StaffProfileScreen
                         clinicId={membership.clinic_id}
-                        staffRole={role === "senior_doctor" ? "senior_doctor" : "doctor"}
+                        staffRole={role === "junior_doctor" ? "junior_doctor" : "doctor"}
                         onSaved={refreshData}
                       />
                     ) : null
@@ -2556,7 +2654,9 @@ function MobileHome({ onSignOut, userEmail }: { onSignOut: () => void; userEmail
                     <OwnerReportsScreen
                       reportsEnabled={clinicReportsEnabled}
                       visitSummaries={adminVisitSummaries}
+                      clinicTimezone={clinicTimezone}
                       onOpenVisitReport={onOpenVisitReport}
+                      onDownloadVisitReport={onDownloadVisitReport}
                       onDownloadAll={onDownloadAllAdminReports}
                       downloadingAll={downloadingAdminReports}
                       refreshing={refreshing}
@@ -2710,7 +2810,9 @@ function MobileHome({ onSignOut, userEmail }: { onSignOut: () => void; userEmail
                     <OwnerReportsScreen
                       reportsEnabled={clinicReportsEnabled}
                       visitSummaries={adminVisitSummaries}
+                      clinicTimezone={clinicTimezone}
                       onOpenVisitReport={onOpenVisitReport}
+                      onDownloadVisitReport={onDownloadVisitReport}
                       onDownloadAll={onDownloadAllAdminReports}
                       downloadingAll={downloadingAdminReports}
                       refreshing={refreshing}
@@ -2767,6 +2869,89 @@ function MobileHome({ onSignOut, userEmail }: { onSignOut: () => void; userEmail
                   {() =>
                     membership?.clinic_id ? (
                       <InviteQrMobileScreen clinicId={membership.clinic_id} membershipRole={role} />
+                    ) : null
+                  }
+                </Tab.Screen>
+              </>
+            ) : role === "manager" || role === "junior" ? (
+              <>
+                <Tab.Screen
+                  name={role === "manager" ? "Manager" : "Junior"}
+                  options={{
+                    tabBarIcon: ({ color, size }) => <MaterialIcons name="manage-accounts" size={size} color={color} />,
+                  }}
+                >
+                  {() => (
+                    <AdminMobileStatsScreen
+                      title={role === "manager" ? "Manager workspace" : "Junior workspace"}
+                      subtitle="Records and prescriptions access (no visit workflow)"
+                      stats={adminStats}
+                      refreshing={refreshing}
+                      onRefresh={refreshData}
+                    />
+                  )}
+                </Tab.Screen>
+                <Tab.Screen
+                  name="Patients"
+                  options={{
+                    tabBarIcon: ({ color, size }) => <MaterialIcons name="groups" size={size} color={color} />,
+                  }}
+                >
+                  {() =>
+                    membership?.clinic_id ? (
+                      <AdminPatientsScreen clinicId={membership.clinic_id} refreshing={refreshing} onRefresh={refreshData} />
+                    ) : null
+                  }
+                </Tab.Screen>
+                <Tab.Screen
+                  name="Reports"
+                  options={{
+                    tabBarIcon: ({ color, size }) => <MaterialIcons name="picture-as-pdf" size={size} color={color} />,
+                  }}
+                >
+                  {() => (
+                    <OwnerReportsScreen
+                      reportsEnabled={clinicReportsEnabled}
+                      visitSummaries={adminVisitSummaries}
+                      clinicTimezone={clinicTimezone}
+                      onOpenVisitReport={onOpenVisitReport}
+                      onDownloadVisitReport={onDownloadVisitReport}
+                      onDownloadAll={onDownloadAllAdminReports}
+                      downloadingAll={downloadingAdminReports}
+                      refreshing={refreshing}
+                      onRefresh={refreshData}
+                    />
+                  )}
+                </Tab.Screen>
+                <Tab.Screen
+                  name="Rx"
+                  options={{
+                    tabBarIcon: ({ color, size }) => <MaterialIcons name="medication" size={size} color={color} />,
+                  }}
+                >
+                  {() => (
+                    <ClinicPrescriptionsScreen
+                      prescriptions={clinicRecentPrescriptions}
+                      onOpenPrescriptionPdf={onOpenPrescriptionPdf}
+                      onGeneratePrescriptionPdf={onGeneratePrescriptionPdf}
+                      refreshing={refreshing}
+                      onRefresh={refreshData}
+                    />
+                  )}
+                </Tab.Screen>
+                <Tab.Screen
+                  name="Profile"
+                  options={{
+                    tabBarIcon: ({ color, size }) => <MaterialIcons name="badge" size={size} color={color} />,
+                  }}
+                >
+                  {() =>
+                    membership?.clinic_id ? (
+                      <StaffProfileScreen
+                        clinicId={membership.clinic_id}
+                        staffRole={role === "manager" ? "manager" : "junior"}
+                        onSaved={refreshData}
+                      />
                     ) : null
                   }
                 </Tab.Screen>

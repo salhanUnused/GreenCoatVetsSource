@@ -201,7 +201,7 @@ export default async function WalkInGuestPage() {
           <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 space-y-3">
             <label className="flex items-start gap-2 text-[11px] text-slate-800">
               <input type="checkbox" name="booking_consent" required className="mt-0.5 rounded border-slate-300" />
-              <span>{APPOINTMENT_BOOKING_CONSENT_TEXT}</span>
+              <span className="whitespace-pre-line">{APPOINTMENT_BOOKING_CONSENT_TEXT}</span>
             </label>
             <ConsentSignatureField />
           </div>

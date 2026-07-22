@@ -1,4 +1,5 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
+import { formatClinicDateTime } from "@saasclinics/lib";
 
 const PAGE_WIDTH = 595;
 const PAGE_HEIGHT = 842;
@@ -65,6 +66,7 @@ export type BookingConsentPdfInput = {
   /** Smaller subtitle under the title */
   documentSubtitle?: string;
   footerLabel?: string;
+  clinicTimezone?: string | null;
 };
 
 /** Signed consent PDF for clinic bookings, walk-ins, and online consults. */
@@ -107,12 +109,12 @@ export async function buildBookingConsentPdf(input: BookingConsentPdfInput): Pro
   drawLabelValue("Pet owner", input.ownerName);
   drawLabelValue("Patient (pet)", `${input.petName}${input.petSpecies ? ` · ${input.petSpecies}` : ""}`);
   if (input.appointmentAtIso) {
-    drawLabelValue("Appointment time", new Date(input.appointmentAtIso).toLocaleString());
+    drawLabelValue("Appointment time", formatClinicDateTime(input.appointmentAtIso, input.clinicTimezone));
   }
   if (input.chiefComplaint?.trim()) {
     drawLabelValue("Chief complaint", input.chiefComplaint.trim());
   }
-  drawLabelValue("Signed on", new Date(input.signedAtIso).toLocaleString());
+  drawLabelValue("Signed on", formatClinicDateTime(input.signedAtIso, input.clinicTimezone));
 
   y -= 4;
   page.drawLine({

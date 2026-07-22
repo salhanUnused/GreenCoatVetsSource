@@ -1,5 +1,6 @@
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
+import { formatClinicDateTime, visitReportPdfSourceLabel } from "@saasclinics/lib";
 import { OwnerNeonCard } from "../../components/OwnerNeonCard";
 import { commonStyles } from "../../theme/commonStyles";
 import { theme } from "../../theme/theme";
@@ -8,7 +9,9 @@ import type { OwnerVisitSummaryRow } from "../../types/app";
 export function OwnerReportsScreen({
   reportsEnabled,
   visitSummaries,
+  clinicTimezone,
   onOpenVisitReport,
+  onDownloadVisitReport,
   onDownloadAll,
   downloadingAll,
   refreshing,
@@ -16,7 +19,9 @@ export function OwnerReportsScreen({
 }: {
   reportsEnabled: boolean;
   visitSummaries: OwnerVisitSummaryRow[];
+  clinicTimezone?: string | null;
   onOpenVisitReport: (visitId: string) => Promise<void>;
+  onDownloadVisitReport?: (visitId: string) => Promise<void>;
   onDownloadAll: () => Promise<void>;
   downloadingAll: boolean;
   refreshing: boolean;
@@ -25,12 +30,7 @@ export function OwnerReportsScreen({
   const readyReports = visitSummaries.filter((v) => v.report_ready);
 
   function formatWhen(iso: string | null) {
-    if (!iso) return "—";
-    try {
-      return new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
-    } catch {
-      return "—";
-    }
+    return formatClinicDateTime(iso, clinicTimezone);
   }
 
   return (
@@ -64,14 +64,25 @@ export function OwnerReportsScreen({
                 <Text style={styles.petName}>{v.pet_name}</Text>
                 <Text style={commonStyles.muted}>{v.branch_name}</Text>
                 <Text style={styles.when}>{formatWhen(v.visited_at)}</Text>
-                <Text style={styles.status}>{v.status_label}</Text>
+                <Text style={styles.status}>
+                  {v.status_label}
+                  {v.report_ready ? ` · ${visitReportPdfSourceLabel(v.visit_report_pdf_source)}` : ""}
+                </Text>
               </View>
               {reportsEnabled ? (
                 v.report_ready ? (
-                  <Pressable style={styles.pdfBtn} onPress={() => void onOpenVisitReport(v.id)}>
-                    <MaterialIcons name="picture-as-pdf" size={22} color={theme.primary} />
-                    <Text style={styles.pdfBtnText}>Open PDF</Text>
-                  </Pressable>
+                  <View style={styles.pdfActions}>
+                    <Pressable style={styles.pdfBtn} onPress={() => void onOpenVisitReport(v.id)}>
+                      <MaterialIcons name="picture-as-pdf" size={22} color={theme.primary} />
+                      <Text style={styles.pdfBtnText}>Open</Text>
+                    </Pressable>
+                    {onDownloadVisitReport ? (
+                      <Pressable style={styles.pdfBtn} onPress={() => void onDownloadVisitReport(v.id)}>
+                        <MaterialIcons name="file-download" size={22} color={theme.primary} />
+                        <Text style={styles.pdfBtnText}>Save</Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
                 ) : (
                   <Text style={styles.pending}>PDF pending</Text>
                 )
@@ -110,6 +121,7 @@ const styles = StyleSheet.create({
   petName: { fontWeight: "800", fontSize: 16, color: theme.onSurface },
   when: { marginTop: 4, fontSize: 13, fontWeight: "600", color: theme.onSurface },
   status: { marginTop: 2, fontSize: 12, color: theme.primary, fontWeight: "700" },
+  pdfActions: { flexDirection: "row", gap: 6 },
   pdfBtn: {
     alignItems: "center",
     justifyContent: "center",

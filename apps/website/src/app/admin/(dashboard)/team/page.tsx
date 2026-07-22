@@ -37,7 +37,12 @@ export default async function AdminTeamPage({
       <div>
         <h1 className="font-headline text-3xl font-bold">Our team</h1>
         <p className="mt-2 text-slate-600">
-          Add team members for the homepage &ldquo;Our team&rdquo; section. Upload a square photo and enter their name.
+          Manage who appears on the public homepage &ldquo;Our team&rdquo; section and the{" "}
+          <a href="/team" className="font-semibold text-primary underline" target="_blank" rel="noreferrer">
+            /team
+          </a>{" "}
+          page. These are curated marketing profiles — not pulled from clinic staff accounts. Upload a square photo and
+          enter their name and role.
         </p>
       </div>
       <AdminFlashMessages saved={saved} deleted={deleted} error={errorMessage} />

@@ -347,8 +347,9 @@ export default async function AdminSettingsPage({
         <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
           <h2 className="font-headline text-lg font-bold text-primary">Welcome video</h2>
           <p className="mt-1 text-sm text-slate-600">
-            Paste a YouTube, Vimeo, or direct MP4 link. It appears on the homepage in a green square video card. Leave empty to hide the
-            section.
+            Paste a YouTube, Vimeo, or direct MP4 link. After saving, it appears on the{" "}
+            <strong>homepage</strong> (below &ldquo;Why rely on us&rdquo;) in a green square video card. Leave empty to
+            hide the section.
           </p>
           <div className="mt-4 max-w-2xl">
             <label className="block text-xs font-bold uppercase text-slate-500" htmlFor="welcome_video_url">
@@ -368,7 +369,8 @@ export default async function AdminSettingsPage({
         <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
           <h2 className="font-headline text-lg font-bold text-primary">Clinic gallery</h2>
           <p className="mt-1 text-sm text-slate-600">
-            One HTTPS image URL per line (up to 24). Shown as a photo gallery on the homepage. Leave empty to hide the section.
+            One HTTPS image URL per line (up to 24). After saving, photos appear on the <strong>homepage</strong> in the
+            Gallery section (below the welcome video). Leave empty to hide the section.
           </p>
           <div className="mt-4 max-w-3xl">
             <label className="block text-xs font-bold uppercase text-slate-500" htmlFor="gallery_image_urls">

@@ -1,4 +1,5 @@
 import { formatClinicDate } from "@saasclinics/lib";
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
 import { ensurePrescriptionForVisit, saveVisitRecord } from "../actions";

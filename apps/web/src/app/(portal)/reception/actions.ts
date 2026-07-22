@@ -73,7 +73,7 @@ export async function createWalkInGuestPatient(formData: FormData) {
   const { clinic_id } = await getActiveMembership();
   const supabase = createClient();
 
-  const { data: clinic } = await supabase.from("clinics").select("name, timezone").eq("id", clinic_id).maybeSingle();
+  const { data: clinic } = await supabase.from("clinics").select("name, timezone, support_email").eq("id", clinic_id).maybeSingle();
   const clinicName = (clinic?.name as string | undefined)?.trim() || "Clinic";
 
   const { data: ownerRow, error: oErr } = await supabase
@@ -180,24 +180,30 @@ export async function createWalkInGuestPatient(formData: FormData) {
           .eq("id", appointmentId)
           .eq("clinic_id", clinic_id);
 
-        if (email) {
-          const transporter = createHostingerTransport();
-          const from = getHostingerFromAddress();
-          if (transporter && from) {
-            await transporter.sendMail({
-              from,
-              to: email,
-              subject: `${clinicName} walk-in consent for ${petName}`,
-              text: `Hi ${full},\n\nThank you for visiting ${clinicName}. Your signed consent form for ${petName} is attached for your records.\n`,
-              attachments: [
-                {
-                  filename: `consent-${petName.replace(/\s+/g, "-").toLowerCase()}.pdf`,
-                  content: Buffer.from(pdfBytes),
-                  contentType: "application/pdf",
-                },
-              ],
-            });
-          }
+        const transporter = createHostingerTransport();
+        const from = getHostingerFromAddress();
+        if (transporter && from) {
+          const adminEmail = process.env.ADMIN_NOTIFICATION_EMAIL?.trim().toLowerCase();
+          const supportEmail = (clinic as { support_email?: string | null } | null)?.support_email?.trim().toLowerCase();
+          const recipients = Array.from(new Set([adminEmail, supportEmail].filter((value): value is string => Boolean(value))));
+          await Promise.allSettled(
+            recipients.map((recipient) =>
+              transporter.sendMail({
+                from,
+                to: recipient,
+                replyTo: email || undefined,
+                subject: `${clinicName} walk-in consent for ${petName}`,
+                text: `Walk-in consent form attached.\n\nOwner: ${full}\nPhone: ${phone}\nEmail: ${email || "—"}\nPatient: ${petName}\n`,
+                attachments: [
+                  {
+                    filename: `consent-${petName.replace(/\s+/g, "-").toLowerCase()}.pdf`,
+                    content: Buffer.from(pdfBytes),
+                    contentType: "application/pdf",
+                  },
+                ],
+              }),
+            ),
+          );
         }
       }
     } catch (consentErr) {

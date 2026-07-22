@@ -31,7 +31,7 @@ export async function sendAppointmentBookingNotificationEmail(params: {
   bookingSource: "owner_portal" | "guest_website";
   /** Guest booking confirmation / claim code (merge_token). */
   bookingCode?: string | null;
-  /** Signed consent PDF attached to staff and owner notification emails. */
+  /** Signed consent PDF attached to staff/admin notification emails only. */
   consentPdfAttachment?: { filename: string; content: Buffer } | null;
   /** Action buttons for staff (e.g. owner/doctor video room) — URLs hidden behind labels. */
   staffCtas?: EmailCta[];
@@ -118,9 +118,6 @@ export async function sendAppointmentBookingNotificationEmail(params: {
         bookingCode
           ? `Your booking code is ${bookingCode}. Keep it to manage this appointment in your account or when contacting the clinic.`
           : null,
-        params.consentPdfAttachment
-          ? "Your signed consent form is attached as a PDF for your records."
-          : null,
       ].filter(Boolean) as string[],
       details: [
         { label: "Clinic", value: params.clinicName },
@@ -141,15 +138,6 @@ export async function sendAppointmentBookingNotificationEmail(params: {
         subject: `${params.clinicName} appointment confirmed for ${params.petName}`,
         text: ownerMail.text,
         html: ownerMail.html,
-        attachments: params.consentPdfAttachment
-          ? [
-              {
-                filename: params.consentPdfAttachment.filename,
-                content: params.consentPdfAttachment.content,
-                contentType: "application/pdf",
-              },
-            ]
-          : undefined,
       }),
     ]);
   }

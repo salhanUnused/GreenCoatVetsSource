@@ -7,6 +7,7 @@ import { getRoleNavGroups } from "@/lib/auth/permissions";
 import { getActiveMembership } from "@/lib/auth/get-active-membership";
 import { createClient } from "@/lib/supabase/server";
 import { archiveMedicineCatalogEntry, saveMedicineCatalogEntry } from "./actions";
+import { MedicineDosagePresets } from "@/components/clinical/medicine-dosage-presets";
 
 type MedicineRow = {
   id: string;
@@ -100,12 +101,21 @@ export default async function MedicinesPage() {
               placeholder="Aliases, spellings, or speech variants. Separate with commas or new lines."
             />
             <div className="grid gap-3 sm:grid-cols-2">
-              <input className="input-soft" name="default_dosage" placeholder="Default dosage (fixed amount)" />
-              <input className="input-soft" name="dosage_per_kg" placeholder="Dosage per kg (e.g. 10 mg/kg)" />
+              <div>
+                <input className="input-soft" name="default_dosage" placeholder="Default dosage (fixed amount)" />
+                <p className="mt-1 text-[11px] text-on-surface-variant">Used when weight is unknown — e.g. 250 mg</p>
+              </div>
+              <div>
+                <input className="input-soft" name="dosage_per_kg" placeholder="Dosage per kg (e.g. 10 mg/kg)" />
+                <p className="mt-1 text-[11px] text-on-surface-variant">Auto-calculates in consult when pet weight is set</p>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <MedicineDosagePresets />
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
-              <input className="input-soft" name="default_frequency" placeholder="Default frequency" />
-              <input className="input-soft" name="default_duration" placeholder="Default duration" />
+              <input className="input-soft" name="default_frequency" placeholder="Default frequency (e.g. BID)" />
+              <input className="input-soft" name="default_duration" placeholder="Default duration (e.g. 5 days)" />
             </div>
             <textarea className="input-soft min-h-[72px]" name="notes" placeholder="Internal notes for doctors/admins" />
             <SubmitButton className="btn-primary w-fit">Save medicine</SubmitButton>

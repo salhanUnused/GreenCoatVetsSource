@@ -8,6 +8,7 @@ import {
   normalizeLegacySpeciesToCanonical,
 } from "@saasclinics/lib";
 import { APPOINTMENT_BOOKING_CONSENT_TEXT, APPOINTMENT_BOOKING_CONSENT_VERSION } from "@/lib/booking/appointment-consent";
+import { isSignaturePngDataUrl, uploadBookingConsentPdf } from "@/lib/booking/persist-booking-consent";
 import { normalizeBookingPetGender, parseBookingAgeYearsToMonths } from "@/lib/booking/pet-demographics";
 import { resolveClinic } from "@/lib/clinic/resolve-clinic";
 import { sendAppointmentBookingNotificationEmail } from "@/lib/email/send-appointment-booking-notification-email";
@@ -55,6 +56,7 @@ export async function submitGuestBooking(formData: FormData) {
   const allergies = String(formData.get("allergies") ?? "").trim();
   const currentMedications = String(formData.get("current_medications") ?? "").trim();
   const consentAccepted = String(formData.get("booking_consent") ?? "") === "on";
+  const signaturePng = String(formData.get("consent_signature_png") ?? "").trim();
 
   if (!branchId || !startsAtRaw || !fullName || !phone || !email || !petName) {
     throw new Error("Please fill in branch, date & time, your details, and pet name.");
@@ -67,6 +69,9 @@ export async function submitGuestBooking(formData: FormData) {
   }
   if (!consentAccepted) {
     throw new Error("You must accept the booking consent before submitting.");
+  }
+  if (!isSignaturePngDataUrl(signaturePng)) {
+    throw new Error("Owner signature is required on the consent form.");
   }
   if (!appointmentTypes.includes(appointmentType as (typeof appointmentTypes)[number])) {
     throw new Error("Invalid appointment type.");
@@ -110,6 +115,27 @@ export async function submitGuestBooking(formData: FormData) {
     await supabase.from("owners").update({ user_id: user.id }).eq("id", row.owner_id);
   }
 
+  let consentPdfAttachment: { filename: string; content: Buffer } | null = null;
+  try {
+    const uploaded = await uploadBookingConsentPdf({
+      supabase,
+      clinicId: clinic.id,
+      appointmentId: row.appointment_id,
+      clinicName: clinic.name,
+      ownerName: fullName,
+      petName,
+      petSpecies: normalizeLegacySpeciesToCanonical(petSpecies || DEFAULT_PET_SPECIES_BOOKING_VALUE),
+      chiefComplaint: chiefComplaint || null,
+      appointmentAtIso: startsAt,
+      signaturePngBase64: signaturePng,
+    });
+    if (uploaded) {
+      consentPdfAttachment = { filename: `consent-${petName.replace(/\s+/g, "-").toLowerCase()}.pdf`, content: uploaded.buffer };
+    }
+  } catch (consentErr) {
+    console.error("[book/guest] consent PDF failed", consentErr);
+  }
+
   try {
     await sendAppointmentBookingNotificationEmail({
       clinicId: clinic.id,
@@ -125,6 +151,7 @@ export async function submitGuestBooking(formData: FormData) {
       notes: notes || null,
       bookingSource: "guest_website",
       bookingCode: row.merge_token,
+      consentPdfAttachment,
     });
   } catch (mailErr) {
     console.error("[book/guest] admin notification email failed", mailErr);

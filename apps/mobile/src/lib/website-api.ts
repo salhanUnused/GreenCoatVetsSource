@@ -20,11 +20,15 @@ export async function notifyAppointmentBookingEmails(input: {
   appointmentType: string;
   startsAtIso: string;
   petId: string;
+  appointmentId?: string;
   chiefComplaint?: string | null;
   notes?: string | null;
   contactFullName?: string | null;
   contactPhone?: string | null;
   contactEmail?: string | null;
+  signaturePng?: string | null;
+  bookingSource?: "owner_portal" | "guest_website";
+  documentTitle?: string;
 }): Promise<void> {
   const base = getWebsiteBaseUrl();
   if (!base) {

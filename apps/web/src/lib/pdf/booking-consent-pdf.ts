@@ -60,14 +60,11 @@ export type BookingConsentPdfInput = {
   signedAtIso: string;
   consentText: string;
   signaturePngBase64?: string | null;
-  /** Header title shown on the PDF */
   documentTitle?: string;
-  /** Smaller subtitle under the title */
   documentSubtitle?: string;
   footerLabel?: string;
 };
 
-/** Signed consent PDF for clinic bookings, walk-ins, and online consults. */
 export async function buildBookingConsentPdf(input: BookingConsentPdfInput): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
   const page = doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
@@ -183,16 +180,4 @@ export async function buildBookingConsentPdf(input: BookingConsentPdfInput): Pro
   });
 
   return doc.save();
-}
-
-/** @deprecated Prefer buildBookingConsentPdf — kept for online-consult call sites. */
-export async function buildOnlineConsultConsentPdf(
-  input: Omit<BookingConsentPdfInput, "documentTitle" | "documentSubtitle" | "footerLabel">,
-): Promise<Uint8Array> {
-  return buildBookingConsentPdf({
-    ...input,
-    documentTitle: "Senior Veterinarian Online Consultation",
-    documentSubtitle: "Signed consent form",
-    footerLabel: `${input.clinicName} · Senior Vet online consultation consent`,
-  });
 }

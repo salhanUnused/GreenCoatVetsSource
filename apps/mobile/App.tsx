@@ -30,6 +30,7 @@ import {
 import { VetCareTabBar } from "./src/navigation/VetCareTabBar";
 import { VetCareTabButton } from "./src/navigation/VetCareTabButton";
 import { OwnerHealthScreen } from "./src/screens/OwnerHealthScreen";
+import { OwnerInboxScreen } from "./src/screens/OwnerInboxScreen";
 import { ReceptionistScreen } from "./src/screens/ReceptionistScreen";
 import { OwnerBookingScreen } from "./src/screens/OwnerBookingScreen";
 import { AuthScreen } from "./src/screens/AuthScreen";
@@ -1407,6 +1408,7 @@ function MobileHome({ onSignOut, userEmail }: { onSignOut: () => void; userEmail
     petGender?: string | null;
     petAgeYears?: string;
     bookingConsent: boolean;
+    consentSignaturePng?: string | null;
   }) {
     if (!membership?.clinic_id) return;
 
@@ -1461,6 +1463,10 @@ function MobileHome({ onSignOut, userEmail }: { onSignOut: () => void; userEmail
     }
     if (!input.bookingConsent) {
       Alert.alert("Consent required", "You must accept the booking consent before submitting.");
+      return;
+    }
+    if (!input.consentSignaturePng?.startsWith("data:image/png")) {
+      Alert.alert("Signature required", "Please sign the consent form before submitting.");
       return;
     }
     if (!contactFullName) {
@@ -1564,21 +1570,25 @@ function MobileHome({ onSignOut, userEmail }: { onSignOut: () => void; userEmail
       return;
     }
 
-    const { error } = await supabase.from("appointments").insert({
-      clinic_id: membership.clinic_id,
-      branch_id: branchId,
-      doctor_id: doctorId,
-      pet_id: petId,
-      owner_id: resolvedOwnerId,
-      appointment_type: appointmentType as "consultation" | "vaccination" | "surgery" | "grooming" | "emergency",
-      status: "scheduled",
-      starts_at: startsAtIso,
-      reason: chiefComplaint || null,
-      notes: notes || null,
-      owner_intake: ownerIntake,
-      booking_source: "owner_portal",
-      created_by: user.id,
-    });
+    const { data: insertedAppt, error } = await supabase
+      .from("appointments")
+      .insert({
+        clinic_id: membership.clinic_id,
+        branch_id: branchId,
+        doctor_id: doctorId,
+        pet_id: petId,
+        owner_id: resolvedOwnerId,
+        appointment_type: appointmentType as "consultation" | "vaccination" | "surgery" | "grooming" | "emergency",
+        status: "scheduled",
+        starts_at: startsAtIso,
+        reason: chiefComplaint || null,
+        notes: notes || null,
+        owner_intake: ownerIntake,
+        booking_source: "owner_portal",
+        created_by: user.id,
+      })
+      .select("id")
+      .single();
     if (error) {
       Alert.alert("Booking failed", error.message);
       return;
@@ -1591,11 +1601,13 @@ function MobileHome({ onSignOut, userEmail }: { onSignOut: () => void; userEmail
         appointmentType,
         startsAtIso,
         petId: petId!,
+        appointmentId: insertedAppt?.id,
         chiefComplaint: chiefComplaint || null,
         notes: notes || null,
         contactFullName,
         contactPhone,
         contactEmail,
+        signaturePng: input.consentSignaturePng,
       });
     } catch (mailErr) {
       console.warn("[booking] notification email failed", mailErr);
@@ -2005,6 +2017,14 @@ function MobileHome({ onSignOut, userEmail }: { onSignOut: () => void; userEmail
       Alert.alert("Missing details", "Phone and pet name are required.");
       return;
     }
+    if (!input.bookingConsent) {
+      Alert.alert("Consent required", "Owner must accept the consent statement.");
+      return;
+    }
+    if (!input.consentSignaturePng?.startsWith("data:image/png")) {
+      Alert.alert("Signature required", "Capture the owner signature before saving.");
+      return;
+    }
 
     const ageMonthsRaw = input.ageMonths.trim();
     const weightKgRaw = input.weightKg.trim();
@@ -2025,6 +2045,8 @@ function MobileHome({ onSignOut, userEmail }: { onSignOut: () => void; userEmail
     const lastName = nameParts.length > 1 ? nameParts.slice(1).join(" ") : "Walk-in";
     const fullName = rawName.length > 0 ? rawName : `${firstName} ${lastName}`;
     const notes = input.notes.trim();
+    const ownerEmail = input.email ? input.email.trim().toLowerCase() : null;
+    const signedAt = new Date().toISOString();
 
     const { data: ownerRow, error: oErr } = await supabase
       .from("owners")
@@ -2035,7 +2057,7 @@ function MobileHome({ onSignOut, userEmail }: { onSignOut: () => void; userEmail
         last_name: lastName,
         full_name: fullName,
         phone: input.phone,
-        email: input.email ? input.email.trim().toLowerCase() : null,
+        email: ownerEmail,
         contact_type: "customer",
         contact_notes: notes ? `Walk-in (mobile). ${notes}` : "Walk-in (mobile) — no portal account yet.",
       })
@@ -2068,19 +2090,52 @@ function MobileHome({ onSignOut, userEmail }: { onSignOut: () => void; userEmail
     }
 
     if (input.createAppointment && input.branchId) {
-      const { error: aErr } = await supabase.from("appointments").insert({
-        clinic_id: membership.clinic_id,
-        branch_id: input.branchId,
-        pet_id: petRow.id,
-        owner_id: ownerRow.id,
-        appointment_type: "consultation",
-        status: "scheduled",
-        starts_at: new Date().toISOString(),
-        notes: notes ? `Walk-in from mobile. ${notes}` : "Walk-in from mobile front desk",
-      });
+      const startsAtIso = new Date().toISOString();
+      const { data: appt, error: aErr } = await supabase
+        .from("appointments")
+        .insert({
+          clinic_id: membership.clinic_id,
+          branch_id: input.branchId,
+          pet_id: petRow.id,
+          owner_id: ownerRow.id,
+          appointment_type: "consultation",
+          status: "scheduled",
+          starts_at: startsAtIso,
+          notes: notes ? `Walk-in from mobile. ${notes}` : "Walk-in from mobile front desk",
+          booking_source: "clinic_portal",
+          consent_signed_at: signedAt,
+          owner_intake: {
+            consent_accepted: true,
+            consent_text: APPOINTMENT_BOOKING_CONSENT_TEXT,
+            consent_version: APPOINTMENT_BOOKING_CONSENT_VERSION,
+            consent_at: signedAt,
+            walk_in: true,
+          },
+        })
+        .select("id")
+        .single();
       if (aErr) {
         Alert.alert("Appointment failed", aErr.message);
         return;
+      }
+
+      try {
+        await notifyAppointmentBookingEmails({
+          clinicId: membership.clinic_id,
+          branchId: input.branchId,
+          appointmentType: "consultation",
+          startsAtIso,
+          petId: petRow.id,
+          appointmentId: appt?.id,
+          notes: notes || null,
+          contactFullName: fullName,
+          contactPhone: input.phone,
+          contactEmail: ownerEmail,
+          signaturePng: input.consentSignaturePng,
+          documentTitle: "Walk-in visit consent",
+        });
+      } catch (mailErr) {
+        console.warn("[walk-in] notification email failed", mailErr);
       }
     }
 
@@ -2316,6 +2371,21 @@ function MobileHome({ onSignOut, userEmail }: { onSignOut: () => void; userEmail
                       downloadingAll={downloadingAllReports}
                       refreshing={refreshing}
                       onRefresh={refreshData}
+                    />
+                  )}
+                </Tab.Screen>
+                <Tab.Screen
+                  name="Alerts"
+                  options={{
+                    tabBarIcon: ({ color, size }) => <MaterialIcons name="notifications" size={size} color={color} />,
+                  }}
+                >
+                  {() => (
+                    <OwnerInboxScreen
+                      notifications={notifications}
+                      refreshing={refreshing}
+                      onRefresh={refreshData}
+                      onOpenVisitReport={onOpenVisitReport}
                     />
                   )}
                 </Tab.Screen>

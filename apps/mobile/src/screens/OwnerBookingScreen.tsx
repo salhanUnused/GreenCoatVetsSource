@@ -10,6 +10,7 @@ import { theme } from "../theme/theme";
 import { PetAvatar } from "../components/PetAvatar";
 import { OwnerNeonCard } from "../components/OwnerNeonCard";
 import { BookingDoctorSlotPicker, type BookingDoctor } from "../components/BookingDoctorSlotPicker";
+import { SignaturePad } from "../components/SignaturePad";
 import { handleDateTimePickerChange } from "../lib/dateTimePickerBridge";
 import {
   APPOINTMENT_BOOKING_CONSENT_TEXT,
@@ -76,6 +77,7 @@ export function OwnerBookingScreen({
     petGender?: string | null;
     petAgeYears?: string;
     bookingConsent: boolean;
+    consentSignaturePng?: string | null;
     newPetName?: string;
     newPetSpecies?: string;
     newPetBreed?: string;
@@ -105,6 +107,7 @@ export function OwnerBookingScreen({
   const [contactPhone, setContactPhone] = useState(ownerPhone ?? "");
   const [contactEmail, setContactEmail] = useState(ownerEmail ?? "");
   const [bookingConsent, setBookingConsent] = useState(false);
+  const [consentSignaturePng, setConsentSignaturePng] = useState<string | null>(null);
 
   const [petGender, setPetGender] = useState<PetGenderValue | "">("");
   const [petAgeYears, setPetAgeYears] = useState("");
@@ -228,6 +231,10 @@ export function OwnerBookingScreen({
       Alert.alert("Consent required", "Please accept the booking consent before submitting.");
       return;
     }
+    if (!consentSignaturePng?.startsWith("data:image/png")) {
+      Alert.alert("Signature required", "Please sign and tap Capture signature.");
+      return;
+    }
     if (hasBookingDoctors && doctorId && !slotStartsAt) {
       Alert.alert("Select a time slot", "Choose an available slot for the selected doctor.");
       return;
@@ -282,6 +289,7 @@ export function OwnerBookingScreen({
       petGender: hasPets ? petGender || null : undefined,
       petAgeYears: hasPets ? petAgeYears.trim() || undefined : undefined,
       bookingConsent: true,
+      consentSignaturePng,
     });
   }
 
@@ -580,6 +588,10 @@ export function OwnerBookingScreen({
           />
           <Text style={styles.consentText}>{APPOINTMENT_BOOKING_CONSENT_TEXT}</Text>
         </Pressable>
+
+        <Text style={[commonStyles.sectionLabel, { marginTop: 14 }]}>Your signature</Text>
+        <SignaturePad onChange={setConsentSignaturePng} />
+        {consentSignaturePng ? <Text style={[commonStyles.muted, { marginTop: 4 }]}>Signature captured.</Text> : null}
 
         <Pressable onPress={submitBooking} style={({ pressed }) => [{ opacity: pressed ? 0.9 : 1, marginTop: 20 }]}>
           <LinearGradient

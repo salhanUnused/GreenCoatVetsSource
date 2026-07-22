@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import { PET_SPECIES_BOOKING_OPTIONS } from "@saasclinics/lib";
+import { SignaturePad } from "../components/SignaturePad";
+import { APPOINTMENT_BOOKING_CONSENT_TEXT } from "../lib/appointmentConsent";
 import { commonStyles } from "../theme/commonStyles";
 import { theme } from "../theme/theme";
 
@@ -17,6 +19,8 @@ export type WalkInInput = {
   branchId: string;
   notes: string;
   createAppointment: boolean;
+  bookingConsent: boolean;
+  consentSignaturePng: string | null;
 };
 
 export function WalkInScreen({
@@ -40,6 +44,8 @@ export function WalkInScreen({
   const [weightKg, setWeightKg] = useState("");
   const [notes, setNotes] = useState("");
   const [createAppointment, setCreateAppointment] = useState(true);
+  const [bookingConsent, setBookingConsent] = useState(false);
+  const [consentSignaturePng, setConsentSignaturePng] = useState<string | null>(null);
   const [branchId, setBranchId] = useState(branches[0]?.id ?? "");
   const [saving, setSaving] = useState(false);
 
@@ -58,6 +64,8 @@ export function WalkInScreen({
     setWeightKg("");
     setNotes("");
     setCreateAppointment(true);
+    setBookingConsent(false);
+    setConsentSignaturePng(null);
   }
 
   async function submit() {
@@ -67,6 +75,14 @@ export function WalkInScreen({
     }
     if (createAppointment && !branchId) {
       Alert.alert("Branch required", "Select a branch for the appointment.");
+      return;
+    }
+    if (!bookingConsent) {
+      Alert.alert("Consent required", "Owner must accept the consent statement.");
+      return;
+    }
+    if (!consentSignaturePng?.startsWith("data:image/png")) {
+      Alert.alert("Signature required", "Capture the owner signature before saving.");
       return;
     }
     setSaving(true);
@@ -83,6 +99,8 @@ export function WalkInScreen({
         branchId,
         notes: notes.trim(),
         createAppointment,
+        bookingConsent: true,
+        consentSignaturePng,
       });
       resetForm();
     } finally {
@@ -217,6 +235,19 @@ export function WalkInScreen({
           placeholderTextColor={theme.outline}
           multiline
         />
+
+        <Pressable style={styles.checkRow} onPress={() => setBookingConsent((v) => !v)}>
+          <MaterialIcons
+            name={bookingConsent ? "check-box" : "check-box-outline-blank"}
+            size={22}
+            color={theme.primary}
+          />
+          <Text style={styles.checkLabel}>{APPOINTMENT_BOOKING_CONSENT_TEXT}</Text>
+        </Pressable>
+
+        <Text style={[commonStyles.sectionLabel, { marginTop: 12 }]}>Owner signature</Text>
+        <SignaturePad onChange={setConsentSignaturePng} />
+        {consentSignaturePng ? <Text style={[commonStyles.muted, { marginTop: 4 }]}>Signature captured.</Text> : null}
 
         <Pressable
           onPress={() => void submit()}

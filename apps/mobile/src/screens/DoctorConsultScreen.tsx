@@ -18,6 +18,7 @@ import { MaterialIcons } from "@expo/vector-icons";
 import { AppointmentStatusPicker } from "../components/AppointmentStatusPicker";
 import { fetchVisitAttachments, openVisitAttachment, type VisitAttachmentRow } from "../lib/visitAttachments";
 import { handleDateTimePickerChange } from "../lib/dateTimePickerBridge";
+import { formatDosageForPetWeight, type CatalogMedicine } from "../lib/dosageByWeight";
 import { supabase } from "../lib/supabase";
 import { DoctorStackParamList } from "../navigation/types";
 import { commonStyles } from "../theme/commonStyles";
@@ -42,6 +43,7 @@ type PetQuick = {
   allergies: string | null;
   chronic_diseases: string | null;
   photo_url: string | null;
+  weight_kg?: number | null;
 };
 
 const SUGGESTED_MEDS = ["Amoxicillin", "Carprofen", "Metronidazole", "Prednisolone", "Maropitant"];
@@ -136,6 +138,8 @@ export function DoctorConsultScreen({
   const [appointmentType, setAppointmentType] = useState<string | null>(null);
   const [vaccineName, setVaccineName] = useState("");
   const [vaccineNextDue, setVaccineNextDue] = useState<Date | null>(null);
+  const [catalogMeds, setCatalogMeds] = useState<CatalogMedicine[]>([]);
+
   const [showVaccineDuePicker, setShowVaccineDuePicker] = useState(false);
   const [appointmentStatus, setAppointmentStatus] = useState("scheduled");
   const [attachments, setAttachments] = useState<VisitAttachmentRow[]>([]);
@@ -143,10 +147,31 @@ export function DoctorConsultScreen({
 
   const medsFiltered = useMemo(() => {
     const q = medQuery.trim().toLowerCase();
-    const all = Array.from(new Set([...SUGGESTED_MEDS, ...medicineNames]));
+    const catalogNames = catalogMeds.map((m) => m.name);
+    const all = Array.from(new Set([...SUGGESTED_MEDS, ...medicineNames, ...catalogNames]));
     if (!q) return all.slice(0, 18);
     return all.filter((m) => m.toLowerCase().includes(q)).slice(0, 18);
-  }, [medQuery, medicineNames]);
+  }, [medQuery, medicineNames, catalogMeds]);
+
+  function addMedicineLine(name: string) {
+    const catalog = catalogMeds.find((m) => m.name.toLowerCase() === name.toLowerCase());
+    const weightKg = petQuick?.weight_kg ?? null;
+    const dosage =
+      formatDosageForPetWeight(catalog?.dosage_per_kg, weightKg, catalog?.default_dosage) ??
+      catalog?.default_dosage ??
+      "";
+    setRxLines((prev) => [
+      ...prev,
+      {
+        medicine_name: name,
+        dosage,
+        frequency: catalog?.default_frequency ?? "",
+        duration: catalog?.default_duration ?? "",
+        instructions: "",
+      },
+    ]);
+    setMedQuery("");
+  }
 
   const load = useCallback(async () => {
     if (!appointmentId) {
@@ -181,7 +206,7 @@ export function DoctorConsultScreen({
     const { data: appt } = await supabase
       .from("appointments")
       .select(
-        "pet_id, doctor_id, appointment_type, status, owners(full_name, phone), pets(id, name, breed, age_months, date_of_birth, allergies, chronic_diseases, photo_url)"
+        "pet_id, doctor_id, appointment_type, status, owners(full_name, phone), pets(id, name, breed, age_months, date_of_birth, allergies, chronic_diseases, photo_url, weight_kg)"
       )
       .eq("id", appointmentId)
       .eq("clinic_id", clinicId)
@@ -191,12 +216,21 @@ export function DoctorConsultScreen({
     const effectivePrescriber = doctorStaffId ?? apptDoctorId;
     setPrescriberStaffId(effectivePrescriber);
 
-    const [{ data: clinicRow }, { data: doctorRow }] = await Promise.all([
+    const [{ data: clinicRow }, { data: doctorRow }, { data: catalogRows }] = await Promise.all([
       supabase.from("clinics").select("name, image_url").eq("id", clinicId).maybeSingle(),
       effectivePrescriber
         ? supabase.from("staff_profiles").select("full_name").eq("id", effectivePrescriber).maybeSingle()
         : Promise.resolve({ data: null }),
+      supabase
+        .from("medicine_catalog_entries")
+        .select("name, default_dosage, dosage_per_kg, default_frequency, default_duration")
+        .eq("clinic_id", clinicId)
+        .eq("is_active", true)
+        .order("name", { ascending: true })
+        .limit(300),
     ]);
+
+    setCatalogMeds(((catalogRows as CatalogMedicine[]) ?? []).filter((m) => m.name?.trim()));
 
     const petRaw = appt?.pets as PetQuick | PetQuick[] | null | undefined;
     const pet = Array.isArray(petRaw) ? petRaw[0] : petRaw;
@@ -298,25 +332,52 @@ export function DoctorConsultScreen({
     if (vaccineName.trim() && vaccineNextDue) {
       const { data: apptRow } = await supabase
         .from("appointments")
-        .select("branch_id, pet_id")
+        .select("branch_id, pet_id, owner_id")
         .eq("id", appointmentId)
         .eq("clinic_id", clinicId)
         .maybeSingle();
       if (apptRow?.pet_id) {
         const administeredDay = new Date().toISOString().slice(0, 10);
         const dueDay = vaccineNextDue.toISOString().slice(0, 10);
-        const { error: vErr } = await supabase.from("vaccination_records").insert({
-          clinic_id: clinicId,
-          branch_id: apptRow.branch_id,
-          pet_id: apptRow.pet_id,
-          vaccine_name: vaccineName.trim(),
-          dose: null,
-          administered_on: administeredDay,
-          due_on: dueDay,
-          status: "due",
-        });
+        const { data: vaxRow, error: vErr } = await supabase
+          .from("vaccination_records")
+          .insert({
+            clinic_id: clinicId,
+            branch_id: apptRow.branch_id,
+            pet_id: apptRow.pet_id,
+            vaccine_name: vaccineName.trim(),
+            dose: null,
+            administered_on: administeredDay,
+            due_on: dueDay,
+            status: "due",
+          })
+          .select("id")
+          .single();
         if (vErr) {
           Alert.alert("Vaccination record", vErr.message);
+        } else if (vaxRow?.id && apptRow.owner_id) {
+          const { data: owner } = await supabase
+            .from("owners")
+            .select("user_id, full_name")
+            .eq("id", apptRow.owner_id)
+            .maybeSingle();
+          const petLabel = petQuick?.name ?? "Your pet";
+          await supabase.from("notifications").insert({
+            clinic_id: clinicId,
+            owner_id: apptRow.owner_id,
+            user_id: owner?.user_id ?? null,
+            channel: "push",
+            title: "Vaccination reminder",
+            message: `${petLabel}: ${vaccineName.trim()} is due on ${dueDay}.`,
+            payload: { kind: "vaccination_reminder", event: "vaccination_due", entity_id: vaxRow.id },
+          });
+          try {
+            await supabase.rpc("ensure_vaccination_reminder_token", {
+              p_vaccination_record_id: vaxRow.id,
+            });
+          } catch {
+            /* optional */
+          }
         }
       }
     }
@@ -684,16 +745,20 @@ export function DoctorConsultScreen({
           />
         ) : null}
         <Text style={[commonStyles.muted, { marginTop: 8 }]}>
-          When you complete the visit, this is saved to vaccination records so the owner sees it under alerts.
+          Completing the visit saves this reminder to the owner Notifications tab.
         </Text>
       </View>
 
       <View style={[commonStyles.card, styles.glassCard]}>
         <Text style={commonStyles.cardTitle}>Prescription builder</Text>
-        <TextInput style={commonStyles.input} value={medQuery} onChangeText={setMedQuery} placeholder="Search medicine database" placeholderTextColor={theme.outline} />
+        <Text style={[commonStyles.muted, { marginBottom: 8 }]}>
+          Catalog medicines auto-fill dosage from per-kg standards when pet weight is on file
+          {petQuick?.weight_kg ? ` (${petQuick.weight_kg} kg)` : ""}.
+        </Text>
+        <TextInput style={commonStyles.input} value={medQuery} onChangeText={setMedQuery} placeholder="Search medicine catalog" placeholderTextColor={theme.outline} />
         <View style={styles.suggestRow}>
           {medsFiltered.map((m) => (
-            <Pressable key={m} style={styles.suggestChip} onPress={() => setRxLines((prev) => [...prev, { medicine_name: m, dosage: "", frequency: "", duration: "", instructions: "" }])}>
+            <Pressable key={m} style={styles.suggestChip} onPress={() => addMedicineLine(m)}>
               <Text style={styles.suggestChipText}>{m}</Text>
             </Pressable>
           ))}

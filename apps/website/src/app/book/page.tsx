@@ -10,6 +10,7 @@ import { AppointmentDateTimeField } from "@/components/site/appointment-datetime
 import { BookingDoctorSlotPicker } from "@/components/site/booking-doctor-slot-picker";
 import { BookingProgressIndicator } from "@/components/site/booking-progress-indicator";
 import { BookingSubmitButton } from "@/components/site/booking-submit-button";
+import { ConsentSignatureField } from "@/components/booking/consent-signature-field";
 import { submitGuestBooking } from "@/app/book/actions";
 import { submitOwnerBooking } from "@/app/book/owner-actions";
 
@@ -326,6 +327,9 @@ export default async function BookAppointmentPage({
                       />
                       <span>{APPOINTMENT_BOOKING_CONSENT_TEXT}</span>
                     </label>
+                    <div className="mt-4">
+                      <ConsentSignatureField />
+                    </div>
                   </div>
                 </div>
               </section>
@@ -496,6 +500,9 @@ export default async function BookAppointmentPage({
                       />
                       <span>{APPOINTMENT_BOOKING_CONSENT_TEXT}</span>
                     </label>
+                    <div className="mt-4">
+                      <ConsentSignatureField />
+                    </div>
                   </div>
                 </div>
               </section>

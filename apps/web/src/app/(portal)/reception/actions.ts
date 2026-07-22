@@ -4,6 +4,9 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getActiveMembership } from "@/lib/auth/get-active-membership";
 import { getUserAccess } from "@/lib/auth/get-user-access";
+import { APPOINTMENT_BOOKING_CONSENT_TEXT, APPOINTMENT_BOOKING_CONSENT_VERSION } from "@/lib/booking/appointment-consent";
+import { createHostingerTransport, getHostingerFromAddress } from "@/lib/email/hostinger-mail";
+import { buildBookingConsentPdf } from "@/lib/pdf/booking-consent-pdf";
 import { normalizeLegacySpeciesToCanonical } from "@saasclinics/lib";
 import { createClient } from "@/lib/supabase/server";
 
@@ -26,6 +29,10 @@ function splitOwnerName(raw: string): { first: string; last: string; full: strin
   return { first, last, full: `${first} ${last}` };
 }
 
+function isSignaturePngDataUrl(value: string | null | undefined): boolean {
+  return Boolean(value?.startsWith("data:image/png") && value.length > 80);
+}
+
 /** One-step walk-in: guest contact (no portal account) + patient; optional appointment slot. */
 export async function createWalkInGuestPatient(formData: FormData) {
   const access = await getUserAccess();
@@ -45,9 +52,13 @@ export async function createWalkInGuestPatient(formData: FormData) {
   const branchId = String(formData.get("branch_id") ?? "").trim();
   const createAppointment = String(formData.get("create_appointment") ?? "") === "on";
   const notes = String(formData.get("notes") ?? "").trim();
+  const consentAccepted = String(formData.get("booking_consent") ?? "") === "on";
+  const signaturePng = String(formData.get("consent_signature_png") ?? "").trim();
 
   if (!phone) throw new Error("Phone is required for walk-in.");
   if (!petName) throw new Error("Patient name is required.");
+  if (!consentAccepted) throw new Error("Owner booking consent is required.");
+  if (!isSignaturePngDataUrl(signaturePng)) throw new Error("Owner signature is required.");
   const ageMonths = ageMonthsRaw ? Number.parseInt(ageMonthsRaw, 10) : null;
   const weightKg = weightKgRaw ? Number.parseFloat(weightKgRaw) : null;
   if (ageMonthsRaw && (!Number.isFinite(ageMonths as number) || (ageMonths as number) < 0)) {
@@ -61,6 +72,9 @@ export async function createWalkInGuestPatient(formData: FormData) {
 
   const { clinic_id } = await getActiveMembership();
   const supabase = createClient();
+
+  const { data: clinic } = await supabase.from("clinics").select("name").eq("id", clinic_id).maybeSingle();
+  const clinicName = (clinic?.name as string | undefined)?.trim() || "Clinic";
 
   const { data: ownerRow, error: oErr } = await supabase
     .from("owners")
@@ -102,18 +116,92 @@ export async function createWalkInGuestPatient(formData: FormData) {
   if (pErr) throw new Error(pErr.message);
   if (!petRow?.id) throw new Error("Could not create patient.");
 
+  let appointmentId: string | null = null;
+  const startsAt = new Date().toISOString();
+  const signedAt = startsAt;
+  const ownerIntake = {
+    consent_accepted: true,
+    consent_text: APPOINTMENT_BOOKING_CONSENT_TEXT,
+    consent_version: APPOINTMENT_BOOKING_CONSENT_VERSION,
+    consent_at: signedAt,
+    walk_in: true,
+  };
+
   if (createAppointment && branchId) {
-    const { error: aErr } = await supabase.from("appointments").insert({
-      clinic_id,
-      branch_id: branchId,
-      pet_id: petRow.id,
-      owner_id: ownerRow.id,
-      appointment_type: "consultation",
-      status: "scheduled",
-      starts_at: new Date().toISOString(),
-      notes: notes ? `Walk-in from web front desk. ${notes}` : "Walk-in from web front desk",
-    });
+    const { data: appt, error: aErr } = await supabase
+      .from("appointments")
+      .insert({
+        clinic_id,
+        branch_id: branchId,
+        pet_id: petRow.id,
+        owner_id: ownerRow.id,
+        appointment_type: "consultation",
+        status: "scheduled",
+        starts_at: startsAt,
+        notes: notes ? `Walk-in from web front desk. ${notes}` : "Walk-in from web front desk",
+        owner_intake: ownerIntake,
+        booking_source: "clinic_portal",
+        consent_signed_at: signedAt,
+      })
+      .select("id")
+      .single();
     if (aErr) throw new Error(aErr.message);
+    appointmentId = appt?.id ?? null;
+  }
+
+  if (appointmentId && isSignaturePngDataUrl(signaturePng)) {
+    try {
+      const pdfBytes = await buildBookingConsentPdf({
+        clinicName,
+        ownerName: full,
+        petName,
+        petSpecies: species,
+        appointmentAtIso: startsAt,
+        signedAtIso: signedAt,
+        consentText: APPOINTMENT_BOOKING_CONSENT_TEXT,
+        signaturePngBase64: signaturePng,
+        documentTitle: "Walk-in visit consent",
+        documentSubtitle: "Signed consent form",
+        footerLabel: `${clinicName} · Walk-in consent`,
+      });
+      const path = `${clinic_id}/consent/${appointmentId}.pdf`;
+      const { error: upErr } = await supabase.storage.from("medical-files").upload(path, pdfBytes, {
+        contentType: "application/pdf",
+        upsert: true,
+      });
+      if (!upErr) {
+        await supabase
+          .from("appointments")
+          .update({
+            consent_pdf_path: path,
+            owner_intake: { ...ownerIntake, consent_pdf_path: path },
+          })
+          .eq("id", appointmentId)
+          .eq("clinic_id", clinic_id);
+
+        if (email) {
+          const transporter = createHostingerTransport();
+          const from = getHostingerFromAddress();
+          if (transporter && from) {
+            await transporter.sendMail({
+              from,
+              to: email,
+              subject: `${clinicName} walk-in consent for ${petName}`,
+              text: `Hi ${full},\n\nThank you for visiting ${clinicName}. Your signed consent form for ${petName} is attached for your records.\n`,
+              attachments: [
+                {
+                  filename: `consent-${petName.replace(/\s+/g, "-").toLowerCase()}.pdf`,
+                  content: Buffer.from(pdfBytes),
+                  contentType: "application/pdf",
+                },
+              ],
+            });
+          }
+        }
+      }
+    } catch (consentErr) {
+      console.error("[walk-in] consent PDF/email failed", consentErr);
+    }
   }
 
   revalidatePath("/owners");

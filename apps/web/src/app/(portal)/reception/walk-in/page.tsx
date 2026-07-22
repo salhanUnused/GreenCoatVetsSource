@@ -3,9 +3,11 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createWalkInGuestPatient } from "../actions";
 import { AppShell } from "@/components/web/app-shell";
+import { ConsentSignatureField } from "@/components/clinical/consent-signature-field";
 import { getUserAccess } from "@/lib/auth/get-user-access";
 import { getActiveMembership } from "@/lib/auth/get-active-membership";
 import { getRoleNavGroups } from "@/lib/auth/permissions";
+import { APPOINTMENT_BOOKING_CONSENT_TEXT } from "@/lib/booking/appointment-consent";
 import { getPlatformBranding } from "@/lib/platform-branding";
 import { createClient } from "@/lib/supabase/server";
 import { SubmitButton } from "@/components/web/submit-button";
@@ -196,6 +198,13 @@ export default async function WalkInGuestPage() {
             <span className="font-semibold text-slate-800">Desk notes</span>
             <textarea name="notes" rows={2} className="rounded border border-slate-200 bg-white px-2 py-1.5" placeholder="Optional" />
           </label>
+          <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 space-y-3">
+            <label className="flex items-start gap-2 text-[11px] text-slate-800">
+              <input type="checkbox" name="booking_consent" required className="mt-0.5 rounded border-slate-300" />
+              <span>{APPOINTMENT_BOOKING_CONSENT_TEXT}</span>
+            </label>
+            <ConsentSignatureField />
+          </div>
           <SubmitButton className="btn-primary btn-compact" pendingLabel="Saving…">
             Save walk-in & go to appointments
           </SubmitButton>

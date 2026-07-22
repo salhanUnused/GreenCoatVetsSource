@@ -11,12 +11,21 @@ type NotificationItem = {
   channel: string;
   created_at: string;
   read_at: string | null;
-  payload?: { kind?: string; visit_id?: string } | null;
+  payload?: { kind?: string; visit_id?: string; event?: string } | null;
 };
 
 function isVisitReportShared(item: NotificationItem) {
   const payload = item.payload;
   return payload?.kind === "visit_report_shared" && Boolean(payload.visit_id);
+}
+
+function isVaccinationReminder(item: NotificationItem) {
+  const payload = item.payload;
+  return (
+    payload?.kind === "vaccination_reminder" ||
+    payload?.event === "vaccination_due" ||
+    payload?.event === "vaccination_due_manual"
+  );
 }
 
 export function OwnerInboxScreen({
@@ -39,17 +48,19 @@ export function OwnerInboxScreen({
       }
     >
       <OwnerNeonCard>
-        <Text style={commonStyles.cardTitle}>Inbox</Text>
-        <Text style={[commonStyles.muted, { marginBottom: 12 }]}>
-          Clinic updates, visit report alerts, and reminders.
-        </Text>
+        <Text style={commonStyles.cardTitle}>Notifications</Text>
         {notifications.map((item, index) => {
           const reportShared = isVisitReportShared(item);
+          const vaxReminder = isVaccinationReminder(item);
           const visitId = item.payload?.visit_id;
           return (
             <Pressable
               key={item.id}
-              style={[styles.notif, index === notifications.length - 1 && styles.notifLast, reportShared && styles.notifHighlight]}
+              style={[
+                styles.notif,
+                index === notifications.length - 1 && styles.notifLast,
+                (reportShared || vaxReminder) && styles.notifHighlight,
+              ]}
               disabled={!reportShared || !visitId || !onOpenVisitReport}
               onPress={() => {
                 if (reportShared && visitId && onOpenVisitReport) {
@@ -59,9 +70,9 @@ export function OwnerInboxScreen({
             >
               <View style={styles.notifHeader}>
                 <Text style={styles.notifTitle}>{item.title}</Text>
-                <View style={[styles.channelPill, reportShared && styles.channelPillReport]}>
-                  <Text style={[styles.channelText, reportShared && styles.channelTextReport]}>
-                    {reportShared ? "Report" : item.channel}
+                <View style={[styles.channelPill, (reportShared || vaxReminder) && styles.channelPillReport]}>
+                  <Text style={[styles.channelText, (reportShared || vaxReminder) && styles.channelTextReport]}>
+                    {reportShared ? "Report" : vaxReminder ? "Vaccine" : item.channel}
                   </Text>
                 </View>
               </View>
@@ -81,7 +92,7 @@ export function OwnerInboxScreen({
             </Pressable>
           );
         })}
-        {!notifications.length ? <Text style={commonStyles.emptyState}>You’re all caught up.</Text> : null}
+        {!notifications.length ? <Text style={commonStyles.emptyState}>No notifications yet.</Text> : null}
       </OwnerNeonCard>
     </ScrollView>
   );
@@ -121,25 +132,19 @@ const styles = StyleSheet.create({
     backgroundColor: `${theme.primary}18`,
     borderColor: theme.primary,
   },
-  channelText: {
-    fontSize: 10,
-    fontWeight: "800",
-    color: theme.outline,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
+  channelText: { fontSize: 11, fontWeight: "700", color: theme.onSurfaceVariant },
   channelTextReport: { color: theme.primary },
-  message: { color: theme.onSurfaceVariant, marginTop: 6, fontSize: 14, lineHeight: 20 },
-  meta: { fontSize: 12, color: theme.outline, marginTop: 8, fontWeight: "500" },
-  openRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 10 },
+  message: { marginTop: 6, color: theme.onSurfaceVariant, fontSize: 14, lineHeight: 20 },
+  meta: { marginTop: 6, fontSize: 11, color: theme.outline, fontWeight: "600" },
+  openRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 8 },
   openLink: { color: theme.primary, fontWeight: "800", fontSize: 13 },
   unreadBadge: {
-    alignSelf: "flex-start",
     marginTop: 8,
-    backgroundColor: `${theme.primary}18`,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    alignSelf: "flex-start",
+    backgroundColor: theme.primary,
     borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
   },
-  unreadText: { color: theme.primary, fontWeight: "800", fontSize: 11 },
+  unreadText: { color: theme.onPrimary, fontSize: 10, fontWeight: "800" },
 });

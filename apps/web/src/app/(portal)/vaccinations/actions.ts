@@ -199,17 +199,46 @@ export async function createVaccinationAlertFromVisit(formData: FormData) {
   const { data: clinicRow } = await supabase.from("clinics").select("name").eq("id", clinic_id).maybeSingle();
 
   const reminderSentAt = owner?.email ? new Date().toISOString() : null;
-  const { error: insertError } = await supabase.from("vaccination_records").insert({
-    clinic_id,
-    branch_id: visit.branch_id ?? null,
-    pet_id: visit.pet_id,
-    vaccine_name: vaccineName,
-    dose: dose || null,
-    due_on: dueOn || null,
-    status: owner?.email ? "reminded" : "scheduled",
-    reminder_sent_at: reminderSentAt,
-  });
+  const { data: vaxInserted, error: insertError } = await supabase
+    .from("vaccination_records")
+    .insert({
+      clinic_id,
+      branch_id: visit.branch_id ?? null,
+      pet_id: visit.pet_id,
+      vaccine_name: vaccineName,
+      dose: dose || null,
+      due_on: dueOn || null,
+      status: owner?.email ? "reminded" : "scheduled",
+      reminder_sent_at: reminderSentAt,
+    })
+    .select("id")
+    .single();
   if (insertError) throw new Error(insertError.message);
+
+  const { data: ownerRow } = await supabase
+    .from("owners")
+    .select("user_id")
+    .eq("id", visit.owner_id)
+    .maybeSingle();
+
+  if (vaxInserted?.id && visit.owner_id) {
+    await supabase.from("notifications").insert({
+      clinic_id,
+      owner_id: visit.owner_id,
+      user_id: ownerRow?.user_id ?? null,
+      channel: "push",
+      title: "Vaccination reminder",
+      message: `${pet?.name?.trim() || "Your pet"}: ${vaccineName} is due on ${dueOn || "the scheduled date"}.`,
+      payload: { kind: "vaccination_reminder", event: "vaccination_due", entity_id: vaxInserted.id },
+    });
+    try {
+      await supabase.rpc("ensure_vaccination_reminder_token", {
+        p_vaccination_record_id: vaxInserted.id,
+      });
+    } catch {
+      /* optional */
+    }
+  }
 
   if (owner?.email) {
     await sendVaccinationAlertEmail({

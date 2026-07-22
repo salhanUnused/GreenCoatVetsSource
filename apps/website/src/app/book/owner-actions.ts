@@ -7,6 +7,7 @@ import {
 } from "@saasclinics/lib";
 import { redirect } from "next/navigation";
 import { APPOINTMENT_BOOKING_CONSENT_TEXT, APPOINTMENT_BOOKING_CONSENT_VERSION } from "@/lib/booking/appointment-consent";
+import { isSignaturePngDataUrl, uploadBookingConsentPdf } from "@/lib/booking/persist-booking-consent";
 import { formatBookingAgeYearsLabel, normalizeBookingPetGender, parseBookingAgeYearsToMonths } from "@/lib/booking/pet-demographics";
 import { sendAppointmentBookingNotificationEmail } from "@/lib/email/send-appointment-booking-notification-email";
 import { getOwnerPortalContext } from "@/lib/owner/portal";
@@ -53,6 +54,7 @@ export async function submitOwnerBooking(formData: FormData) {
   const contactPhone = String(formData.get("contact_phone") ?? "").trim();
   const contactEmail = String(formData.get("contact_email") ?? "").trim();
   const consentAccepted = String(formData.get("booking_consent") ?? "") === "on";
+  const signaturePng = String(formData.get("consent_signature_png") ?? "").trim();
 
   if (!branchId || !startsAtRaw) {
     throw new Error("Branch and time are required.");
@@ -71,6 +73,9 @@ export async function submitOwnerBooking(formData: FormData) {
   }
   if (!consentAccepted) {
     throw new Error("You must accept the booking consent before submitting.");
+  }
+  if (!isSignaturePngDataUrl(signaturePng)) {
+    throw new Error("Owner signature is required on the consent form.");
   }
   if (!contactFullName) {
     throw new Error("Full name is required.");
@@ -146,27 +151,66 @@ export async function submitOwnerBooking(formData: FormData) {
     .eq("clinic_id", clinic.id);
   if (ownerUpdateError) throw new Error(ownerUpdateError.message);
 
-  const { error } = await supabase.from("appointments").insert({
-    clinic_id: clinic.id,
-    branch_id: branchId,
-    doctor_id: doctorId,
-    pet_id: petId,
-    owner_id: ownerRow.id,
-    appointment_type: appointmentType,
-    status: "scheduled",
-    starts_at: startsAt,
-    reason: chiefComplaint || null,
-    notes: notes || null,
-    owner_intake: ownerIntake,
-    booking_source: "owner_portal",
-    created_by: user.id,
-  });
+  const { data: insertedAppt, error } = await supabase
+    .from("appointments")
+    .insert({
+      clinic_id: clinic.id,
+      branch_id: branchId,
+      doctor_id: doctorId,
+      pet_id: petId,
+      owner_id: ownerRow.id,
+      appointment_type: appointmentType,
+      status: "scheduled",
+      starts_at: startsAt,
+      reason: chiefComplaint || null,
+      notes: notes || null,
+      owner_intake: ownerIntake,
+      booking_source: "owner_portal",
+      created_by: user.id,
+    })
+    .select("id")
+    .single();
   if (error) throw new Error(error.message);
+  if (!insertedAppt?.id) throw new Error("Booking failed.");
 
   let petDisplayName = newPetName;
   if (existingPetId) {
     const { data: petRow } = await supabase.from("pets").select("name").eq("id", petId).maybeSingle();
     petDisplayName = (petRow?.name as string | undefined) ?? "—";
+  }
+
+  let consentPdfAttachment: { filename: string; content: Buffer } | null = null;
+  try {
+    const uploaded = await uploadBookingConsentPdf({
+      supabase,
+      clinicId: clinic.id,
+      appointmentId: insertedAppt.id,
+      clinicName: clinic.name,
+      ownerName: nextOwnerName,
+      petName: petDisplayName,
+      chiefComplaint: chiefComplaint || null,
+      appointmentAtIso: startsAt,
+      signaturePngBase64: signaturePng,
+    });
+    if (uploaded) {
+      consentPdfAttachment = {
+        filename: `consent-${petDisplayName.replace(/\s+/g, "-").toLowerCase()}.pdf`,
+        content: uploaded.buffer,
+      };
+      await supabase
+        .from("appointments")
+        .update({
+          owner_intake: {
+            ...ownerIntake,
+            consent_at: uploaded.signedAtIso,
+            consent_pdf_path: uploaded.path,
+          },
+        })
+        .eq("id", insertedAppt.id)
+        .eq("clinic_id", clinic.id);
+    }
+  } catch (consentErr) {
+    console.error("[book] consent PDF failed", consentErr);
   }
 
   try {
@@ -183,6 +227,7 @@ export async function submitOwnerBooking(formData: FormData) {
       chiefComplaint: chiefComplaint || null,
       notes: notes || null,
       bookingSource: "owner_portal",
+      consentPdfAttachment,
     });
   } catch (mailErr) {
     console.error("[book] admin notification email failed", mailErr);

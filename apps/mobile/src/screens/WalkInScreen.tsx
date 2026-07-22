@@ -51,6 +51,8 @@ export function WalkInScreen({
   const [consentSignaturePng, setConsentSignaturePng] = useState<string | null>(null);
   const [branchId, setBranchId] = useState(branches[0]?.id ?? "");
   const [saving, setSaving] = useState(false);
+  const [scrollEnabled, setScrollEnabled] = useState(true);
+
 
   useEffect(() => {
     if (!branchId && branches[0]?.id) setBranchId(branches[0].id);
@@ -85,7 +87,7 @@ export function WalkInScreen({
       return;
     }
     if (!consentSignaturePng?.startsWith("data:image/png")) {
-      Alert.alert("Signature required", "Capture the owner signature before saving.");
+      Alert.alert("Signature required", "Ask the owner to sign in the signature box.");
       return;
     }
     setSaving(true);
@@ -126,6 +128,7 @@ export function WalkInScreen({
       keyboardShouldPersistTaps="handled"
       nestedScrollEnabled
       showsVerticalScrollIndicator
+      scrollEnabled={scrollEnabled}
     >
       <View style={[commonStyles.card, embedded && styles.embeddedCard]}>
         {embedded ? null : (
@@ -258,7 +261,7 @@ export function WalkInScreen({
         </Pressable>
 
         <Text style={[commonStyles.sectionLabel, { marginTop: 12 }]}>Owner signature</Text>
-        <SignaturePad onChange={setConsentSignaturePng} />
+        <SignaturePad onChange={setConsentSignaturePng} onDrawActiveChange={(active) => setScrollEnabled(!active)} />
         {consentSignaturePng ? <Text style={[commonStyles.muted, { marginTop: 4 }]}>Signature captured.</Text> : null}
 
         <Pressable

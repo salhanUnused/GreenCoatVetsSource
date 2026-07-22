@@ -2022,7 +2022,7 @@ function MobileHome({ onSignOut, userEmail }: { onSignOut: () => void; userEmail
       return;
     }
     if (!input.consentSignaturePng?.startsWith("data:image/png")) {
-      Alert.alert("Signature required", "Capture the owner signature before saving.");
+      Alert.alert("Signature required", "Ask the owner to sign in the signature box.");
       return;
     }
 

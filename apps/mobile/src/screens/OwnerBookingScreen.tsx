@@ -108,6 +108,7 @@ export function OwnerBookingScreen({
   const [contactEmail, setContactEmail] = useState(ownerEmail ?? "");
   const [bookingConsent, setBookingConsent] = useState(false);
   const [consentSignaturePng, setConsentSignaturePng] = useState<string | null>(null);
+  const [scrollEnabled, setScrollEnabled] = useState(true);
 
   const [petGender, setPetGender] = useState<PetGenderValue | "">("");
   const [petAgeYears, setPetAgeYears] = useState("");
@@ -232,7 +233,7 @@ export function OwnerBookingScreen({
       return;
     }
     if (!consentSignaturePng?.startsWith("data:image/png")) {
-      Alert.alert("Signature required", "Please sign and tap Capture signature.");
+      Alert.alert("Signature required", "Please sign in the signature box.");
       return;
     }
     if (hasBookingDoctors && doctorId && !slotStartsAt) {
@@ -294,8 +295,12 @@ export function OwnerBookingScreen({
   }
 
   return (
-    <ScrollView style={commonStyles.screen} contentContainerStyle={[commonStyles.scrollContent, { paddingBottom: 40 }]}>
-      <OwnerNeonCard>
+    <ScrollView
+      style={commonStyles.screen}
+      contentContainerStyle={[commonStyles.scrollContent, { paddingBottom: 40 }]}
+      scrollEnabled={scrollEnabled}
+      keyboardShouldPersistTaps="handled"
+    >      <OwnerNeonCard>
         <Text style={commonStyles.cardTitle}>Book appointment</Text>
 
         <View style={styles.typeRow}>
@@ -590,7 +595,7 @@ export function OwnerBookingScreen({
         </Pressable>
 
         <Text style={[commonStyles.sectionLabel, { marginTop: 14 }]}>Your signature</Text>
-        <SignaturePad onChange={setConsentSignaturePng} />
+        <SignaturePad onChange={setConsentSignaturePng} onDrawActiveChange={(active) => setScrollEnabled(!active)} />
         {consentSignaturePng ? <Text style={[commonStyles.muted, { marginTop: 4 }]}>Signature captured.</Text> : null}
 
         <Pressable onPress={submitBooking} style={({ pressed }) => [{ opacity: pressed ? 0.9 : 1, marginTop: 20 }]}>

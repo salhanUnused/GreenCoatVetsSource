@@ -14,7 +14,6 @@ export async function generateMetadata() {
 }
 
 export default async function TeamPage() {
-  const clinic = await resolveClinic();
   const members = await getMarketingTeamMembers();
 
   return (

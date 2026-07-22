@@ -13,7 +13,12 @@
       "backgroundColor": "#006c50"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.greencoatvets.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Allow GreenCoatVets to scan clinic invite QR codes and capture visit photos.",
+        "NSPhotoLibraryUsageDescription": "Allow GreenCoatVets to attach photos to medical visits."
+      }
     },
     "android": {
       "package": "com.greencoatvets.app",

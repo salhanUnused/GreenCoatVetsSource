@@ -28,11 +28,14 @@ export function WalkInScreen({
   onWalkIn,
   refreshing,
   onRefresh,
+  embedded = false,
 }: {
   branches: Array<{ id: string; name: string }>;
   onWalkIn: (input: WalkInInput) => Promise<void>;
   refreshing: boolean;
   onRefresh: () => void;
+  /** When true, fills a parent modal sheet instead of a full tab screen. */
+  embedded?: boolean;
 }) {
   const [ownerName, setOwnerName] = useState("");
   const [phone, setPhone] = useState("");
@@ -110,18 +113,27 @@ export function WalkInScreen({
 
   return (
     <ScrollView
-      style={commonStyles.screen}
-      contentContainerStyle={commonStyles.scrollContent}
+      style={embedded ? styles.embeddedScreen : commonStyles.screen}
+      contentContainerStyle={[
+        embedded ? styles.embeddedContent : commonStyles.scrollContent,
+        { paddingBottom: embedded ? 28 : undefined },
+      ]}
       refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} colors={[theme.primary]} />
+        embedded ? undefined : (
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} colors={[theme.primary]} />
+        )
       }
       keyboardShouldPersistTaps="handled"
+      nestedScrollEnabled
+      showsVerticalScrollIndicator
     >
-      <View style={commonStyles.card}>
-        <View style={styles.hero}>
-          <MaterialIcons name="person-add-alt-1" size={28} color={theme.primary} />
-          <Text style={commonStyles.cardTitle}>Walk-in guest</Text>
-        </View>
+      <View style={[commonStyles.card, embedded && styles.embeddedCard]}>
+        {embedded ? null : (
+          <View style={styles.hero}>
+            <MaterialIcons name="person-add-alt-1" size={28} color={theme.primary} />
+            <Text style={commonStyles.cardTitle}>Walk-in guest</Text>
+          </View>
+        )}
 
         <Text style={commonStyles.sectionLabel}>Owner name</Text>
         <TextInput
@@ -262,6 +274,23 @@ export function WalkInScreen({
 }
 
 const styles = StyleSheet.create({
+  embeddedScreen: {
+    flex: 1,
+    backgroundColor: "transparent",
+  },
+  embeddedContent: {
+    flexGrow: 1,
+    paddingHorizontal: 16,
+    paddingTop: 4,
+  },
+  embeddedCard: {
+    marginBottom: 0,
+    shadowOpacity: 0,
+    elevation: 0,
+    borderWidth: 0,
+    backgroundColor: "transparent",
+    paddingHorizontal: 0,
+  },
   hero: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 14 },
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 6 },
   chip: {

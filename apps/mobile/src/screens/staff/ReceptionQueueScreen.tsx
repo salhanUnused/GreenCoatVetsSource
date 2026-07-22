@@ -1,5 +1,17 @@
 import { useState } from "react";
-import { Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import { WalkInScreen, type WalkInInput } from "../WalkInScreen";
 import { Appointment, StaffDoctorOption } from "../../types/app";
@@ -42,6 +54,9 @@ export function ReceptionQueueScreen({
   onApproveTimeChangeRequest?: (requestId: string) => Promise<void>;
 }) {
   const [walkOpen, setWalkOpen] = useState(false);
+  const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
+  const sheetHeight = Math.min(windowHeight * 0.92, windowHeight - Math.max(insets.top, 12));
 
   const inPersonToday = appointments.filter((a) => (a.appointment_type ?? "") !== "online_consult");
 
@@ -142,25 +157,31 @@ export function ReceptionQueueScreen({
         {!inPersonToday.length ? <Text style={commonStyles.emptyState}>No in-clinic appointments for today.</Text> : null}
       </View>
 
-      <Modal visible={walkOpen} animationType="slide" transparent>
+      <Modal visible={walkOpen} animationType="slide" transparent statusBarTranslucent onRequestClose={() => setWalkOpen(false)}>
         <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            style={[styles.modalCard, { height: sheetHeight, paddingBottom: Math.max(insets.bottom, 10) }]}
+          >
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Walk-in guest</Text>
-              <Pressable onPress={() => setWalkOpen(false)} hitSlop={12}>
+              <Pressable onPress={() => setWalkOpen(false)} hitSlop={12} accessibilityLabel="Close walk-in form">
                 <MaterialIcons name="close" size={24} color={theme.onSurfaceVariant} />
               </Pressable>
             </View>
-            <WalkInScreen
-              branches={branches}
-              onWalkIn={async (input) => {
-                await onWalkIn(input);
-                setWalkOpen(false);
-              }}
-              refreshing={false}
-              onRefresh={() => undefined}
-            />
-          </View>
+            <View style={styles.modalBody}>
+              <WalkInScreen
+                embedded
+                branches={branches}
+                onWalkIn={async (input) => {
+                  await onWalkIn(input);
+                  setWalkOpen(false);
+                }}
+                refreshing={false}
+                onRefresh={() => undefined}
+              />
+            </View>
+          </KeyboardAvoidingView>
         </View>
       </Modal>
     </ScrollView>
@@ -199,12 +220,16 @@ const styles = StyleSheet.create({
   docChipOn: { borderColor: theme.primary, backgroundColor: `${theme.primary}18` },
   docChipText: { fontSize: 12, fontWeight: "600", color: theme.onSurface },
   docChipTextOn: { color: theme.primary, fontWeight: "800" },
-  modalBackdrop: { flex: 1, backgroundColor: "#00000088", justifyContent: "flex-end" },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    justifyContent: "flex-end",
+  },
   modalCard: {
+    width: "100%",
     backgroundColor: theme.surfaceBright,
     borderTopLeftRadius: 18,
     borderTopRightRadius: 18,
-    maxHeight: "92%",
     paddingTop: 12,
     overflow: "hidden",
   },
@@ -213,9 +238,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 18,
-    paddingBottom: 4,
+    paddingBottom: 8,
   },
   modalTitle: { fontSize: 18, fontWeight: "800", color: theme.onSurface },
+  modalBody: {
+    flex: 1,
+    minHeight: 0,
+  },
   requestRow: {
     flexDirection: "row",
     alignItems: "center",

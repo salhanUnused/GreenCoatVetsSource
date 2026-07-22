@@ -345,6 +345,47 @@ export default async function AdminSettingsPage({
         </section>
 
         <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h2 className="font-headline text-lg font-bold text-primary">Welcome video</h2>
+          <p className="mt-1 text-sm text-slate-600">
+            Paste a YouTube, Vimeo, or direct MP4 link. It appears on the homepage in a green square video card. Leave empty to hide the
+            section.
+          </p>
+          <div className="mt-4 max-w-2xl">
+            <label className="block text-xs font-bold uppercase text-slate-500" htmlFor="welcome_video_url">
+              Video URL
+            </label>
+            <input
+              id="welcome_video_url"
+              name="welcome_video_url"
+              type="url"
+              defaultValue={settings.welcome_video_url ?? ""}
+              placeholder="https://www.youtube.com/watch?v=… or https://vimeo.com/…"
+              className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-900"
+            />
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h2 className="font-headline text-lg font-bold text-primary">Clinic gallery</h2>
+          <p className="mt-1 text-sm text-slate-600">
+            One HTTPS image URL per line (up to 24). Shown as a photo gallery on the homepage. Leave empty to hide the section.
+          </p>
+          <div className="mt-4 max-w-3xl">
+            <label className="block text-xs font-bold uppercase text-slate-500" htmlFor="gallery_image_urls">
+              Gallery image URLs
+            </label>
+            <textarea
+              id="gallery_image_urls"
+              name="gallery_image_urls"
+              rows={8}
+              defaultValue={settings.gallery_image_urls.join("\n")}
+              placeholder={"https://…/clinic-lobby.jpg\nhttps://…/surgery-suite.jpg"}
+              className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 font-mono text-sm text-slate-900"
+            />
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
           <h2 className="font-headline text-lg font-bold text-primary">Instagram — homepage reels &amp; posts</h2>
           <p className="mt-1 text-sm text-slate-600">
             The homepage uses Instagram&apos;s official embed player for each link. You can <strong>paste URLs manually</strong> (one per line) or{" "}

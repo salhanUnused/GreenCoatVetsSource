@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { HomepageCopy, SocialLinks } from "@/lib/marketing/defaults";
 import { DEFAULT_HOMEPAGE_IMAGES, type HomepageImageKey } from "@/lib/marketing/defaults";
 import { parseInstagramEmbedUrlsBlock } from "@/lib/marketing/instagram-embed-url";
+import { parseGalleryImageUrlsBlock } from "@/lib/marketing/gallery-welcome-video";
 import { fetchInstagramMediaPermalinks, getInstagramGraphEnv } from "@/lib/marketing/instagram-graph-media";
 import { validateSquarePngUpload } from "@saasclinics/lib";
 
@@ -94,6 +95,11 @@ export async function updateMarketingSettings(formData: FormData) {
     String(formData.get("instagram_embed_urls") ?? ""),
   );
 
+  const gallery_image_urls = parseGalleryImageUrlsBlock(String(formData.get("gallery_image_urls") ?? ""));
+
+  const welcomeVideoRaw = String(formData.get("welcome_video_url") ?? "").trim();
+  const welcome_video_url = welcomeVideoRaw && /^https?:\/\//i.test(welcomeVideoRaw) ? welcomeVideoRaw : null;
+
   const { error } = await supabase.from("marketing_site_settings").upsert(
     {
       id: "default",
@@ -104,6 +110,8 @@ export async function updateMarketingSettings(formData: FormData) {
       social_links,
       homepage_copy,
       instagram_embed_urls,
+      gallery_image_urls,
+      welcome_video_url,
       updated_at: new Date().toISOString(),
     },
     { onConflict: "id" },

@@ -9,6 +9,8 @@ import {
 } from "@/lib/marketing/get-marketing-site";
 import { HeroImageSlider } from "@/components/site/hero-image-slider";
 import { InstagramHomeEmbeds } from "@/components/site/instagram-home-embeds";
+import { HomeGallerySection } from "@/components/site/home-gallery-section";
+import { HomeWelcomeVideoSection } from "@/components/site/home-welcome-video-section";
 import { clinicMetadata } from "@/lib/seo/clinic-metadata";
 import { createClient } from "@/lib/supabase/server";
 import { getMarketingTeamMembers } from "@/lib/marketing/get-team-members";
@@ -263,6 +265,10 @@ export default async function Home() {
             </div>
           </div>
         </section>
+
+        <HomeWelcomeVideoSection clinicName={clinic.name} videoUrl={marketing.welcome_video_url} />
+
+        <HomeGallerySection clinicName={clinic.name} urls={marketing.gallery_image_urls} />
 
         <HomeTeamSection members={teamMembers} />
 

@@ -24,6 +24,10 @@ export type MarketingSiteSettingsRow = {
   homepage_copy: HomepageCopy;
   /** Canonical Instagram post/reel permalinks for homepage embeds. */
   instagram_embed_urls: string[];
+  /** Clinic gallery image URLs for the homepage gallery section. */
+  gallery_image_urls: string[];
+  /** Welcome video link (YouTube / Vimeo / direct) for the homepage. */
+  welcome_video_url: string | null;
   seo_settings: MarketingSeoSettings;
   website_favicon_url: string | null;
 };
@@ -36,6 +40,8 @@ const EMPTY: MarketingSiteSettingsRow = {
   social_links: {},
   homepage_copy: {},
   instagram_embed_urls: [],
+  gallery_image_urls: [],
+  welcome_video_url: null,
   seo_settings: { ...EMPTY_SEO_SETTINGS },
   website_favicon_url: null,
 };
@@ -45,7 +51,7 @@ export async function getMarketingSiteSettings(): Promise<MarketingSiteSettingsR
   const { data, error } = await supabase
     .from("marketing_site_settings")
     .select(
-      "default_clinic_id, website_branded_for_clinic_id, contact_form_recipient_email, homepage_images, social_links, homepage_copy, instagram_embed_urls, seo_settings, website_favicon_url",
+      "default_clinic_id, website_branded_for_clinic_id, contact_form_recipient_email, homepage_images, social_links, homepage_copy, instagram_embed_urls, gallery_image_urls, welcome_video_url, seo_settings, website_favicon_url",
     )
     .eq("id", "default")
     .maybeSingle();
@@ -58,6 +64,16 @@ export async function getMarketingSiteSettings(): Promise<MarketingSiteSettingsR
   const instagram_embed_urls = Array.isArray(rawEmbeds)
     ? rawEmbeds.filter((u): u is string => typeof u === "string" && u.trim().length > 0)
     : [];
+
+  const rawGallery = (data as { gallery_image_urls?: unknown }).gallery_image_urls;
+  const gallery_image_urls = Array.isArray(rawGallery)
+    ? rawGallery
+        .filter((u): u is string => typeof u === "string" && /^https?:\/\//i.test(u.trim()))
+        .map((u) => u.trim())
+    : [];
+
+  const welcome_video_url =
+    ((data as { welcome_video_url?: string | null }).welcome_video_url as string | null)?.trim() || null;
 
   const rawSeo = (data as { seo_settings?: MarketingSeoSettings | null }).seo_settings;
   const seo_settings: MarketingSeoSettings =
@@ -74,6 +90,8 @@ export async function getMarketingSiteSettings(): Promise<MarketingSiteSettingsR
     social_links: (data.social_links as SocialLinks) ?? {},
     homepage_copy: ((data as { homepage_copy?: HomepageCopy | null }).homepage_copy as HomepageCopy) ?? {},
     instagram_embed_urls,
+    gallery_image_urls,
+    welcome_video_url,
     seo_settings,
     website_favicon_url: ((data as { website_favicon_url?: string | null }).website_favicon_url as string | null)?.trim() || null,
   };

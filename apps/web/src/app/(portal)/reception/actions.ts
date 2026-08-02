@@ -47,7 +47,8 @@ export async function createWalkInGuestPatient(formData: FormData) {
   const petName = String(formData.get("pet_name") ?? "").trim();
   const species = normalizeLegacySpeciesToCanonical(String(formData.get("species") ?? "").trim() || "unknown");
   const breed = String(formData.get("breed") ?? "").trim();
-  const ageMonthsRaw = String(formData.get("age_months") ?? "").trim();
+  const ageValueRaw = String(formData.get("age_value") ?? formData.get("age_months") ?? "").trim();
+  const ageUnitRaw = String(formData.get("age_unit") ?? "months").trim().toLowerCase();
   const weightKgRaw = String(formData.get("weight_kg") ?? "").trim();
   const branchId = String(formData.get("branch_id") ?? "").trim();
   const createAppointment = String(formData.get("create_appointment") ?? "") === "on";
@@ -59,11 +60,17 @@ export async function createWalkInGuestPatient(formData: FormData) {
   if (!petName) throw new Error("Patient name is required.");
   if (!consentAccepted) throw new Error("Owner booking consent is required.");
   if (!isSignaturePngDataUrl(signaturePng)) throw new Error("Owner signature is required.");
-  const ageMonths = ageMonthsRaw ? Number.parseInt(ageMonthsRaw, 10) : null;
+  const ageAmount = ageValueRaw ? Number(ageValueRaw) : null;
   const weightKg = weightKgRaw ? Number.parseFloat(weightKgRaw) : null;
-  if (ageMonthsRaw && (!Number.isFinite(ageMonths as number) || (ageMonths as number) < 0)) {
-    throw new Error("Age (months) must be a valid non-negative number.");
+  if (ageValueRaw && (!Number.isFinite(ageAmount as number) || (ageAmount as number) < 0)) {
+    throw new Error("Age must be a valid non-negative number.");
   }
+  const ageMonths =
+    ageAmount == null
+      ? null
+      : ageUnitRaw === "years"
+        ? Math.max(0, Math.round(ageAmount * 12))
+        : Math.max(0, Math.round(ageAmount));
   if (weightKgRaw && (!Number.isFinite(weightKg as number) || (weightKg as number) < 0)) {
     throw new Error("Weight (kg) must be a valid non-negative number.");
   }

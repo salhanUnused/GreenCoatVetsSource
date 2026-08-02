@@ -11,6 +11,7 @@ import { BookingDoctorSlotPicker } from "@/components/site/booking-doctor-slot-p
 import { BookingProgressIndicator } from "@/components/site/booking-progress-indicator";
 import { BookingSubmitButton } from "@/components/site/booking-submit-button";
 import { ConsentSignatureField } from "@/components/booking/consent-signature-field";
+import { PetAgeFields } from "@/components/booking/pet-age-fields";
 import { submitGuestBooking } from "@/app/book/actions";
 import { submitOwnerBooking } from "@/app/book/owner-actions";
 
@@ -182,15 +183,9 @@ export default async function BookAppointmentPage({
                         <p className="mt-1 text-xs text-on-surface-variant">Optional for pets already saved in your account.</p>
                       </div>
                       <div>
-                        <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-on-surface-variant">Pet age (years)</label>
-                        <input
-                          className={field}
-                          name="pet_age_years"
-                          type="number"
-                          min="0.1"
-                          step="0.1"
-                          inputMode="decimal"
-                          placeholder="Optional for existing pet"
+                        <PetAgeFields
+                          fieldClassName={field}
+                          optionalHint="Optional for pets already saved in your account."
                         />
                       </div>
                     </>
@@ -223,17 +218,7 @@ export default async function BookAppointmentPage({
                         </select>
                       </div>
                       <div>
-                        <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-on-surface-variant">Pet age (years)</label>
-                        <input
-                          className={field}
-                          name="pet_age_years"
-                          type="number"
-                          min="0.1"
-                          step="0.1"
-                          inputMode="decimal"
-                          placeholder="e.g. 3"
-                          required
-                        />
+                        <PetAgeFields fieldClassName={field} required placeholderYears="e.g. 3" placeholderMonths="e.g. 18" />
                       </div>
                     </>
                   )}
@@ -412,17 +397,7 @@ export default async function BookAppointmentPage({
                     </select>
                   </div>
                   <div>
-                    <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-on-surface-variant">Pet age (years)</label>
-                    <input
-                      className={field}
-                      name="pet_age_years"
-                      type="number"
-                      min="0.1"
-                      step="0.1"
-                      inputMode="decimal"
-                      placeholder="e.g. 2"
-                      required
-                    />
+                    <PetAgeFields fieldClassName={field} required placeholderYears="e.g. 2" placeholderMonths="e.g. 18" />
                   </div>
                 </div>
               </section>

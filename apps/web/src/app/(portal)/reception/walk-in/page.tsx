@@ -159,14 +159,21 @@ export default async function WalkInGuestPage() {
             <input name="breed" className="rounded border border-slate-200 bg-white px-2 py-1.5" placeholder="Breed (optional)" />
           </label>
           <label className="flex flex-col gap-0.5">
-            <span className="font-semibold text-slate-800">Age (months)</span>
-            <input
-              name="age_months"
-              type="number"
-              min={0}
-              className="rounded border border-slate-200 bg-white px-2 py-1.5"
-              placeholder="e.g. 18"
-            />
+            <span className="font-semibold text-slate-800">Pet age</span>
+            <div className="grid grid-cols-[1fr_auto] gap-2">
+              <input
+                name="age_value"
+                type="number"
+                min={0}
+                step="any"
+                className="rounded border border-slate-200 bg-white px-2 py-1.5"
+                placeholder="e.g. 2 or 18"
+              />
+              <select name="age_unit" defaultValue="months" className="rounded border border-slate-200 bg-white px-2 py-1.5">
+                <option value="years">Years</option>
+                <option value="months">Months</option>
+              </select>
+            </div>
           </label>
           <label className="flex flex-col gap-0.5">
             <span className="font-semibold text-slate-800">Weight (kg)</span>

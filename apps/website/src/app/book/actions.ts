@@ -9,7 +9,11 @@ import {
 } from "@saasclinics/lib";
 import { APPOINTMENT_BOOKING_CONSENT_TEXT, APPOINTMENT_BOOKING_CONSENT_VERSION } from "@/lib/booking/appointment-consent";
 import { isSignaturePngDataUrl, uploadBookingConsentPdf } from "@/lib/booking/persist-booking-consent";
-import { normalizeBookingPetGender, parseBookingAgeYearsToMonths } from "@/lib/booking/pet-demographics";
+import {
+  normalizeBookingAgeUnit,
+  normalizeBookingPetGender,
+  parseBookingAgeToMonths,
+} from "@/lib/booking/pet-demographics";
 import { resolveClinic } from "@/lib/clinic/resolve-clinic";
 import { sendAppointmentBookingNotificationEmail } from "@/lib/email/send-appointment-booking-notification-email";
 import { createClient } from "@/lib/supabase/server";
@@ -50,7 +54,8 @@ export async function submitGuestBooking(formData: FormData) {
   const petSpecies = String(formData.get("pet_species") ?? "").trim();
   const petGender = normalizeBookingPetGender(String(formData.get("pet_gender") ?? ""));
   const petAgeYears = String(formData.get("pet_age_years") ?? "").trim();
-  const petAgeMonths = parseBookingAgeYearsToMonths(petAgeYears);
+  const petAgeUnit = normalizeBookingAgeUnit(String(formData.get("pet_age_unit") ?? ""));
+  const petAgeMonths = parseBookingAgeToMonths(petAgeYears, petAgeUnit);
   const chiefComplaint = String(formData.get("chief_complaint") ?? "").trim();
   const notes = String(formData.get("notes") ?? "").trim();
   const allergies = String(formData.get("allergies") ?? "").trim();

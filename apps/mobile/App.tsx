@@ -1423,6 +1423,7 @@ function MobileHome({ onSignOut, userEmail }: { onSignOut: () => void; userEmail
     contactEmail?: string;
     petGender?: string | null;
     petAgeYears?: string;
+    petAgeMonths?: number | null;
     bookingConsent: boolean;
     consentSignaturePng?: string | null;
   }) {
@@ -1448,14 +1449,22 @@ function MobileHome({ onSignOut, userEmail }: { onSignOut: () => void; userEmail
     const petAgeMonths =
       input.newPetAgeMonths != null
         ? input.newPetAgeMonths
-        : input.petAgeYears
-          ? parseBookingAgeYearsToMonths(input.petAgeYears)
-          : null;
+        : input.petAgeMonths != null
+          ? input.petAgeMonths
+          : input.petAgeYears
+            ? parseBookingAgeYearsToMonths(input.petAgeYears)
+            : null;
     const patientAgeLabel =
-      formatBookingAgeYearsLabel(input.petAgeYears ?? "") ??
-      (input.newPetAgeMonths != null
-        ? formatBookingAgeYearsLabel(String(input.newPetAgeMonths / 12))
-        : null);
+      input.petAgeMonths != null
+        ? input.petAgeMonths < 24
+          ? `${input.petAgeMonths} month${input.petAgeMonths === 1 ? "" : "s"}`
+          : formatBookingAgeYearsLabel(String(input.petAgeMonths / 12))
+        : formatBookingAgeYearsLabel(input.petAgeYears ?? "") ??
+          (input.newPetAgeMonths != null
+            ? input.newPetAgeMonths < 24
+              ? `${input.newPetAgeMonths} month${input.newPetAgeMonths === 1 ? "" : "s"}`
+              : formatBookingAgeYearsLabel(String(input.newPetAgeMonths / 12))
+            : null);
 
     if (!branchId || !startsAtRaw) {
       Alert.alert("Missing details", "Choose a branch and a date & time before booking.");

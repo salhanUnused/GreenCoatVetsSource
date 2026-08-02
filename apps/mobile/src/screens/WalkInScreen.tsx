@@ -4,6 +4,7 @@ import { MaterialIcons } from "@expo/vector-icons";
 import { PET_SPECIES_BOOKING_OPTIONS } from "@saasclinics/lib";
 import { SignaturePad } from "../components/SignaturePad";
 import { APPOINTMENT_BOOKING_CONSENT_TEXT } from "../lib/appointmentConsent";
+import { parseBookingAgeToMonths, PET_AGE_UNIT_OPTIONS, type PetAgeUnit } from "../lib/petDemographics";
 import { commonStyles } from "../theme/commonStyles";
 import { theme } from "../theme/theme";
 
@@ -43,7 +44,8 @@ export function WalkInScreen({
   const [petName, setPetName] = useState("");
   const [species, setSpecies] = useState("canine");
   const [breed, setBreed] = useState("");
-  const [ageMonths, setAgeMonths] = useState("");
+  const [ageValue, setAgeValue] = useState("");
+  const [ageUnit, setAgeUnit] = useState<PetAgeUnit>("months");
   const [weightKg, setWeightKg] = useState("");
   const [notes, setNotes] = useState("");
   const [createAppointment, setCreateAppointment] = useState(true);
@@ -65,7 +67,8 @@ export function WalkInScreen({
     setPetName("");
     setSpecies("canine");
     setBreed("");
-    setAgeMonths("");
+    setAgeValue("");
+    setAgeUnit("months");
     setWeightKg("");
     setNotes("");
     setCreateAppointment(true);
@@ -90,8 +93,16 @@ export function WalkInScreen({
       Alert.alert("Signature required", "Ask the owner to sign in the signature box.");
       return;
     }
+    if (ageValue.trim()) {
+      const months = parseBookingAgeToMonths(ageValue, ageUnit);
+      if (months == null) {
+        Alert.alert("Age", "Enter a valid age greater than 0.");
+        return;
+      }
+    }
     setSaving(true);
     try {
+      const months = ageValue.trim() ? parseBookingAgeToMonths(ageValue, ageUnit) : null;
       await onWalkIn({
         ownerName: ownerName.trim(),
         phone: phone.trim(),
@@ -99,7 +110,7 @@ export function WalkInScreen({
         petName: petName.trim(),
         species,
         breed: breed.trim(),
-        ageMonths: ageMonths.trim(),
+        ageMonths: months != null ? String(months) : "",
         weightKg: weightKg.trim(),
         branchId,
         notes: notes.trim(),
@@ -199,14 +210,25 @@ export function WalkInScreen({
           placeholderTextColor={theme.outline}
         />
 
-        <Text style={[commonStyles.sectionLabel, { marginTop: 12 }]}>Age (months)</Text>
+        <Text style={[commonStyles.sectionLabel, { marginTop: 12 }]}>Pet age</Text>
+        <View style={styles.chipRow}>
+          {PET_AGE_UNIT_OPTIONS.map((opt) => (
+            <Pressable
+              key={opt.value}
+              style={[styles.chip, ageUnit === opt.value && styles.chipOn]}
+              onPress={() => setAgeUnit(opt.value)}
+            >
+              <Text style={[styles.chipText, ageUnit === opt.value && styles.chipTextOn]}>{opt.label}</Text>
+            </Pressable>
+          ))}
+        </View>
         <TextInput
-          style={commonStyles.input}
-          value={ageMonths}
-          onChangeText={setAgeMonths}
-          placeholder="e.g. 18"
+          style={[commonStyles.input, { marginTop: 8 }]}
+          value={ageValue}
+          onChangeText={setAgeValue}
+          placeholder={ageUnit === "months" ? "e.g. 18" : "e.g. 2"}
           placeholderTextColor={theme.outline}
-          keyboardType="number-pad"
+          keyboardType={ageUnit === "months" ? "number-pad" : "decimal-pad"}
         />
 
         <Text style={[commonStyles.sectionLabel, { marginTop: 12 }]}>Weight (kg)</Text>

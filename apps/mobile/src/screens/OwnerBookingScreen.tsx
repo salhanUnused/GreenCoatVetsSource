@@ -16,10 +16,12 @@ import {
   APPOINTMENT_BOOKING_CONSENT_TEXT,
 } from "../lib/appointmentConsent";
 import {
-  monthsToAgeYearsInput,
+  monthsToAgeInput,
   normalizeBookingPetGender,
-  parseBookingAgeYearsToMonths,
+  parseBookingAgeToMonths,
+  PET_AGE_UNIT_OPTIONS,
   PET_GENDER_OPTIONS,
+  type PetAgeUnit,
   type PetGenderValue,
 } from "../lib/petDemographics";
 
@@ -80,6 +82,7 @@ export function OwnerBookingScreen({
     contactEmail?: string;
     petGender?: string | null;
     petAgeYears?: string;
+    petAgeMonths?: number | null;
     bookingConsent: boolean;
     consentSignaturePng?: string | null;
     newPetName?: string;
@@ -117,13 +120,15 @@ export function OwnerBookingScreen({
   const [scrollEnabled, setScrollEnabled] = useState(true);
 
   const [petGender, setPetGender] = useState<PetGenderValue | "">("");
-  const [petAgeYears, setPetAgeYears] = useState("");
+  const [petAgeValue, setPetAgeValue] = useState("");
+  const [petAgeUnit, setPetAgeUnit] = useState<PetAgeUnit>("years");
 
   const [newPetName, setNewPetName] = useState("");
   const [newPetSpecies, setNewPetSpecies] = useState(DEFAULT_PET_SPECIES_BOOKING_VALUE);
   const [newPetBreed, setNewPetBreed] = useState("");
   const [newPetGender, setNewPetGender] = useState<PetGenderValue | "">("");
-  const [newPetAgeYears, setNewPetAgeYears] = useState("");
+  const [newPetAgeValue, setNewPetAgeValue] = useState("");
+  const [newPetAgeUnit, setNewPetAgeUnit] = useState<PetAgeUnit>("years");
 
   const [rescheduleId, setRescheduleId] = useState<string | null>(null);
   const [rescheduleAt, setRescheduleAt] = useState(new Date());
@@ -148,8 +153,8 @@ export function OwnerBookingScreen({
     const pet = petOptions.find((p) => p.id === petId);
     if (!pet) return;
     setPetGender((normalizeBookingPetGender(pet.gender) ?? "") as PetGenderValue | "");
-    setPetAgeYears(monthsToAgeYearsInput(pet.age_months));
-  }, [hasPets, petId, petOptions]);
+    setPetAgeValue(monthsToAgeInput(pet.age_months, petAgeUnit));
+  }, [hasPets, petId, petOptions, petAgeUnit]);
 
   const useManualDateTime = !hasBookingDoctors || !doctorId;
 
@@ -269,8 +274,8 @@ export function OwnerBookingScreen({
         Alert.alert("Pet gender required", "Select a gender for your new pet.");
         return;
       }
-      if (!parseBookingAgeYearsToMonths(newPetAgeYears)) {
-        Alert.alert("Pet age required", "Enter your pet's age in years (e.g. 3 or 0.5).");
+      if (!parseBookingAgeToMonths(newPetAgeValue, newPetAgeUnit)) {
+        Alert.alert("Pet age required", "Enter your pet's age and choose years or months.");
         return;
       }
     }
@@ -281,7 +286,7 @@ export function OwnerBookingScreen({
       newPetSpecies: hasPets ? undefined : newPetSpecies.trim(),
       newPetBreed: hasPets ? undefined : newPetBreed.trim() || undefined,
       newPetGender: hasPets ? undefined : newPetGender || null,
-      newPetAgeMonths: hasPets ? undefined : parseBookingAgeYearsToMonths(newPetAgeYears),
+      newPetAgeMonths: hasPets ? undefined : parseBookingAgeToMonths(newPetAgeValue, newPetAgeUnit),
       branchId,
       appointmentType,
       doctorId: doctorId || null,
@@ -294,7 +299,7 @@ export function OwnerBookingScreen({
       contactPhone: contactPhone.trim(),
       contactEmail: contactEmail.trim() || undefined,
       petGender: hasPets ? petGender || null : undefined,
-      petAgeYears: hasPets ? petAgeYears.trim() || undefined : undefined,
+      petAgeMonths: hasPets ? parseBookingAgeToMonths(petAgeValue, petAgeUnit) : undefined,
       bookingConsent: true,
       consentSignaturePng,
     });
@@ -358,14 +363,27 @@ export function OwnerBookingScreen({
                 </Pressable>
               ))}
             </View>
-            <Text style={[commonStyles.sectionLabel, { marginTop: 8 }]}>Pet age (years)</Text>
+            <Text style={[commonStyles.sectionLabel, { marginTop: 8 }]}>Pet age</Text>
+            <View style={styles.speciesChipWrap}>
+              {PET_AGE_UNIT_OPTIONS.map((opt) => (
+                <Pressable
+                  key={opt.value}
+                  style={[styles.speciesChip, petAgeUnit === opt.value && styles.speciesChipOn]}
+                  onPress={() => setPetAgeUnit(opt.value)}
+                >
+                  <Text style={[styles.speciesChipText, petAgeUnit === opt.value && styles.speciesChipTextOn]}>
+                    {opt.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
             <TextInput
-              style={commonStyles.input}
-              value={petAgeYears}
-              onChangeText={setPetAgeYears}
-              placeholder="Optional for existing pet"
+              style={[commonStyles.input, { marginTop: 8 }]}
+              value={petAgeValue}
+              onChangeText={setPetAgeValue}
+              placeholder={petAgeUnit === "months" ? "Optional · e.g. 18" : "Optional · e.g. 3"}
               placeholderTextColor={theme.outline}
-              keyboardType="decimal-pad"
+              keyboardType={petAgeUnit === "months" ? "number-pad" : "decimal-pad"}
             />
           </>
         ) : (
@@ -415,14 +433,27 @@ export function OwnerBookingScreen({
                 </Pressable>
               ))}
             </View>
-            <Text style={[commonStyles.sectionLabel, { marginTop: 8 }]}>Age (years)</Text>
+            <Text style={[commonStyles.sectionLabel, { marginTop: 8 }]}>Age</Text>
+            <View style={styles.speciesChipWrap}>
+              {PET_AGE_UNIT_OPTIONS.map((opt) => (
+                <Pressable
+                  key={opt.value}
+                  style={[styles.speciesChip, newPetAgeUnit === opt.value && styles.speciesChipOn]}
+                  onPress={() => setNewPetAgeUnit(opt.value)}
+                >
+                  <Text style={[styles.speciesChipText, newPetAgeUnit === opt.value && styles.speciesChipTextOn]}>
+                    {opt.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
             <TextInput
-              style={commonStyles.input}
-              value={newPetAgeYears}
-              onChangeText={setNewPetAgeYears}
-              placeholder="e.g. 3"
+              style={[commonStyles.input, { marginTop: 8 }]}
+              value={newPetAgeValue}
+              onChangeText={setNewPetAgeValue}
+              placeholder={newPetAgeUnit === "months" ? "e.g. 18" : "e.g. 3"}
               placeholderTextColor={theme.outline}
-              keyboardType="decimal-pad"
+              keyboardType={newPetAgeUnit === "months" ? "number-pad" : "decimal-pad"}
             />
           </View>
         )}

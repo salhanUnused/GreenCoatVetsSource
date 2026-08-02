@@ -8,7 +8,12 @@ import {
 import { redirect } from "next/navigation";
 import { APPOINTMENT_BOOKING_CONSENT_TEXT, APPOINTMENT_BOOKING_CONSENT_VERSION } from "@/lib/booking/appointment-consent";
 import { isSignaturePngDataUrl, uploadBookingConsentPdf } from "@/lib/booking/persist-booking-consent";
-import { formatBookingAgeYearsLabel, normalizeBookingPetGender, parseBookingAgeYearsToMonths } from "@/lib/booking/pet-demographics";
+import {
+  formatBookingAgeLabel,
+  normalizeBookingAgeUnit,
+  normalizeBookingPetGender,
+  parseBookingAgeToMonths,
+} from "@/lib/booking/pet-demographics";
 import { sendAppointmentBookingNotificationEmail } from "@/lib/email/send-appointment-booking-notification-email";
 import { getOwnerPortalContext } from "@/lib/owner/portal";
 import { createClient } from "@/lib/supabase/server";
@@ -42,7 +47,8 @@ export async function submitOwnerBooking(formData: FormData) {
   const newPetSpecies = String(formData.get("new_pet_species") ?? "").trim();
   const petGender = normalizeBookingPetGender(String(formData.get("pet_gender") ?? ""));
   const petAgeYears = String(formData.get("pet_age_years") ?? "").trim();
-  const petAgeMonths = parseBookingAgeYearsToMonths(petAgeYears);
+  const petAgeUnit = normalizeBookingAgeUnit(String(formData.get("pet_age_unit") ?? ""));
+  const petAgeMonths = parseBookingAgeToMonths(petAgeYears, petAgeUnit);
   const appointmentType = String(formData.get("appointment_type") ?? "consultation").trim();
   const doctorId = String(formData.get("doctor_id") ?? "").trim() || null;
   const startsAtRaw = String(formData.get("starts_at") ?? "").trim();
@@ -86,7 +92,7 @@ export async function submitOwnerBooking(formData: FormData) {
 
   const startsAt = assertAppointmentStartsInFuture(startsAtRaw).toISOString();
   const branchName = await resolvePublicBranchNameForClinic(clinic.id, branchId);
-  const patientAgeLabel = formatBookingAgeYearsLabel(petAgeYears);
+  const patientAgeLabel = formatBookingAgeLabel(petAgeYears, petAgeUnit);
   let petId = existingPetId;
 
   if (!petId) {

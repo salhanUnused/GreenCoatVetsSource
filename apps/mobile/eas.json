@@ -20,12 +20,21 @@
       }
     },
     "production": {
+      "distribution": "store",
+      "environment": "production",
+      "node": "20.19.4",
+      "autoIncrement": true,
       "android": {
         "buildType": "app-bundle"
       }
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "android": {
+        "track": "internal",
+        "releaseStatus": "draft"
+      }
+    }
   }
 }

@@ -1,21 +1,21 @@
+import Link from "next/link";
 import { resolveClinic } from "@/lib/clinic/resolve-clinic";
 import { getPublicStaffForClinic } from "@/lib/clinic/public-staff";
-import { clinicMetadata } from "@/lib/seo/clinic-metadata";
+import { getMergedPageContent } from "@/lib/marketing/get-marketing-site";
+import { applyClinicPlaceholders } from "@/lib/marketing/page-content";
+import { marketingPageMetadata } from "@/lib/marketing/page-metadata";
 
 export async function generateMetadata() {
   const clinic = await resolveClinic();
-  return clinicMetadata({
-    clinicName: clinic.name,
-    title: `${clinic.name} Doctors`,
-    description: `Meet the veterinary doctors at ${clinic.name}.`,
-    path: "/doctors",
-  });
+  return marketingPageMetadata({ slug: "doctors", clinicName: clinic.name, path: "/doctors" });
 }
 
 export default async function DoctorsPage() {
   const clinic = await resolveClinic();
-  const staff = await getPublicStaffForClinic(clinic.id);
+  const [staff, page] = await Promise.all([getPublicStaffForClinic(clinic.id), getMergedPageContent("doctors")]);
   const doctors = staff.filter((s) => s.role === "doctor");
+  const s = page.sections;
+  const t = (value: string | undefined) => applyClinicPlaceholders(value ?? "", clinic.name);
   const physicianLd = {
     "@context": "https://schema.org",
     "@type": "ItemList",
@@ -25,12 +25,12 @@ export default async function DoctorsPage() {
   return (
     <main className="mx-auto w-full max-w-5xl space-y-8 bg-surface px-6 py-12">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(physicianLd) }} />
-      <h1 className="font-headline text-4xl font-extrabold text-on-surface">Doctors</h1>
+      <h1 className="font-headline text-4xl font-extrabold text-on-surface">{t(s.title)}</h1>
       <p className="text-on-surface-variant">
-        Profiles are managed by each clinician in the mobile app.{" "}
-        <a className="font-semibold text-primary underline" href="/team">
+        {t(s.intro)}{" "}
+        <Link className="font-semibold text-primary underline" href="/team">
           See full clinical team
-        </a>
+        </Link>
         .
       </p>
       <div className="grid gap-6 md:grid-cols-2">

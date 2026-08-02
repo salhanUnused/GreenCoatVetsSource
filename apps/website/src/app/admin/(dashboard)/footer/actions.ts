@@ -2,11 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { requireSuperAdmin as assertSuperAdmin } from "@/lib/admin/auth";
+import { requireMarketingManager } from "@/lib/admin/auth";
 import { createClient } from "@/lib/supabase/server";
 
-async function requireSuperAdmin() {
-  await assertSuperAdmin();
+async function requireFooterManager() {
+  await requireMarketingManager();
   return createClient();
 }
 
@@ -24,7 +24,7 @@ function redirectFooterError(message: string): never {
 }
 
 export async function addFooterGroup(formData: FormData) {
-  const supabase = await requireSuperAdmin();
+  const supabase = await requireFooterManager();
   const title = (formData.get("title") as string)?.trim();
   if (!title) redirectFooterError("Column title is required");
 
@@ -49,7 +49,7 @@ export async function addFooterGroup(formData: FormData) {
 }
 
 export async function updateFooterGroup(formData: FormData) {
-  const supabase = await requireSuperAdmin();
+  const supabase = await requireFooterManager();
   const id = formData.get("id") as string;
   if (!id) redirectFooterError("Missing column id");
 
@@ -73,7 +73,7 @@ export async function updateFooterGroup(formData: FormData) {
 }
 
 export async function deleteFooterGroup(formData: FormData) {
-  const supabase = await requireSuperAdmin();
+  const supabase = await requireFooterManager();
   const id = formData.get("id") as string;
   if (!id) redirectFooterError("Missing column id");
 
@@ -85,7 +85,7 @@ export async function deleteFooterGroup(formData: FormData) {
 }
 
 export async function reorderFooterGroup(formData: FormData) {
-  const supabase = await requireSuperAdmin();
+  const supabase = await requireFooterManager();
   const id = formData.get("id") as string;
   const direction = formData.get("direction") as string;
   if (!id || (direction !== "up" && direction !== "down")) redirectFooterError("Invalid reorder");
@@ -121,7 +121,7 @@ export async function reorderFooterGroup(formData: FormData) {
 }
 
 export async function addFooterLink(formData: FormData) {
-  const supabase = await requireSuperAdmin();
+  const supabase = await requireFooterManager();
   const group_id = formData.get("group_id") as string;
   if (!group_id) redirectFooterError("Missing column");
 
@@ -149,7 +149,7 @@ export async function addFooterLink(formData: FormData) {
 }
 
 export async function updateFooterLink(formData: FormData) {
-  const supabase = await requireSuperAdmin();
+  const supabase = await requireFooterManager();
   const id = formData.get("id") as string;
   if (!id) redirectFooterError("Missing link id");
 
@@ -179,7 +179,7 @@ export async function updateFooterLink(formData: FormData) {
 }
 
 export async function deleteFooterLink(formData: FormData) {
-  const supabase = await requireSuperAdmin();
+  const supabase = await requireFooterManager();
   const id = formData.get("id") as string;
   if (!id) redirectFooterError("Missing link id");
 
@@ -191,7 +191,7 @@ export async function deleteFooterLink(formData: FormData) {
 }
 
 export async function reorderFooterLink(formData: FormData) {
-  const supabase = await requireSuperAdmin();
+  const supabase = await requireFooterManager();
   const id = formData.get("id") as string;
   const direction = formData.get("direction") as string;
   if (!id || (direction !== "up" && direction !== "down")) redirectFooterError("Invalid reorder");

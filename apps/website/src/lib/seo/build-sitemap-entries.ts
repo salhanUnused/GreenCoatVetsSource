@@ -26,6 +26,7 @@ export async function buildMarketingSitemapEntries(): Promise<MetadataRoute.Site
   const staticRoutes: MetadataRoute.Sitemap = [
     { url: "/", changeFrequency: "daily", priority: 1 },
     { url: "/about", changeFrequency: "monthly", priority: 0.7 },
+    { url: "/community", changeFrequency: "monthly", priority: 0.7 },
     { url: "/contact", changeFrequency: "monthly", priority: 0.7 },
     { url: "/locations", changeFrequency: "monthly", priority: 0.8 },
     { url: "/services", changeFrequency: "weekly", priority: 0.8 },

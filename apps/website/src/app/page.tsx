@@ -4,82 +4,26 @@ import {
   buildHeroSlideUrls,
   getMarketingLocationsOrDefaults,
   getMarketingSiteSettings,
+  getPageContent,
   mergeHomepageCopy,
   mergeHomepageImages,
 } from "@/lib/marketing/get-marketing-site";
+import { sectionLines } from "@/lib/marketing/page-content";
+import { marketingPageMetadata } from "@/lib/marketing/page-metadata";
 import { HeroImageSlider } from "@/components/site/hero-image-slider";
 import { InstagramHomeEmbeds } from "@/components/site/instagram-home-embeds";
 import { HomeGallerySection } from "@/components/site/home-gallery-section";
 import { HomeWelcomeVideoSection } from "@/components/site/home-welcome-video-section";
-import { clinicMetadata } from "@/lib/seo/clinic-metadata";
 import { createClient } from "@/lib/supabase/server";
 import { getMarketingTeamMembers } from "@/lib/marketing/get-team-members";
 import { HomeTeamSection } from "@/components/site/home-team-section";
 import { getPlatformBranding } from "@/lib/platform-branding";
 
-const FACILITIES = [
-  "Specialized OPD",
-  "Surgeries (major & minor)",
-  "Diagnostics",
-  "In-house path lab",
-  "Dentistry",
-  "Dermatology",
-  "Pet boarding",
-  "Grooming",
-] as const;
-
-const WHY_US = [
-  {
-    title: "We love animals",
-    body: "Your furry friend is family. They deserve the best care and attention — every single visit.",
-    icon: "favorite",
-  },
-  {
-    title: "Convenience",
-    body: "Flexible appointment times plus online booking so scheduling fits your life.",
-    icon: "event_available",
-  },
-  {
-    title: "Personalized care",
-    body: "Trained professionals tailor care to every pet that comes through our doors.",
-    icon: "pets",
-  },
-  {
-    title: "Peace of mind",
-    body: "We know leaving your pet can be stressful — we earn your trust with consistent, kind care.",
-    icon: "shield_with_heart",
-  },
-  {
-    title: "Transparency",
-    body: "Clear communication so you feel confident we always have your pet’s best interests at heart.",
-    icon: "visibility",
-  },
-  {
-    title: "Teamwork",
-    body: "Vets, technicians, and support staff work together for the best possible outcome.",
-    icon: "groups",
-  },
-] as const;
-
-const FAQ_PREVIEW = [
-  "What are your clinic's operating hours?",
-  "Do I need an appointment before visiting?",
-  "What types of animals do you treat?",
-  "Do you have a pet pharmacy?",
-  "What is IDEXX and why do you use it?",
-] as const;
+const WHY_ICONS = ["favorite", "event_available", "pets", "shield_with_heart", "visibility", "groups"] as const;
 
 export async function generateMetadata() {
   const clinic = await resolveClinic();
-  const marketing = await getMarketingSiteSettings();
-  const copy = mergeHomepageCopy(marketing.homepage_copy);
-  const headline = `${copy.line1} ${copy.gradient}`.replace(/\s+/g, " ").trim();
-  return clinicMetadata({
-    clinicName: clinic.name,
-    title: `${clinic.name} | ${headline}`,
-    description: `Happy pets, happy humans. Expert veterinary care for Tricity — OPD, surgery, diagnostics, dentistry, grooming & boarding at ${clinic.name}.`,
-    path: "/",
-  });
+  return marketingPageMetadata({ slug: "home", clinicName: clinic.name, path: "/" });
 }
 
 export default async function Home() {
@@ -93,6 +37,15 @@ export default async function Home() {
   const images = mergeHomepageImages(marketing.homepage_images);
   const heroCopy = mergeHomepageCopy(marketing.homepage_copy);
   const heroSlides = buildHeroSlideUrls(images, marketing.homepage_images);
+  const page = getPageContent("home", marketing.page_content);
+  const s = page.sections;
+  const facilities = sectionLines(s, "facilities_list");
+  const faqPreview = sectionLines(s, "faq_preview_list");
+  const whyUs = [1, 2, 3, 4, 5, 6].map((n, i) => ({
+    title: s[`why_${n}_title`] ?? "",
+    body: s[`why_${n}_body`] ?? "",
+    icon: WHY_ICONS[i] ?? "pets",
+  })).filter((w) => w.title);
   const homepageLocations = publicLocations.slice(0, 3);
   const supabase = createClient();
   const [{ data: services }, { data: reviews }] = await Promise.all([
@@ -215,10 +168,10 @@ export default async function Home() {
         {/* Facilities */}
         <section className="bg-surface py-20 sm:py-24">
           <div className="mx-auto max-w-7xl px-6">
-            <h2 className="font-headline text-3xl font-extrabold text-on-surface sm:text-4xl">Facilities</h2>
-            <p className="mt-3 max-w-2xl text-on-surface-variant">Complete care under one roof — tailored to what your pet needs.</p>
+            <h2 className="font-headline text-3xl font-extrabold text-on-surface sm:text-4xl">{s.facilities_heading}</h2>
+            <p className="mt-3 max-w-2xl text-on-surface-variant">{s.facilities_body}</p>
             <ul className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {FACILITIES.map((f) => (
+              {facilities.map((f) => (
                 <li
                   key={f}
                   className="flex items-center gap-3 rounded-2xl border border-outline-variant/30 bg-surface-container-lowest px-4 py-4 font-semibold text-on-surface shadow-sm"
@@ -253,9 +206,9 @@ export default async function Home() {
         {/* Why rely on us */}
         <section className="bg-surface-container-low py-20 sm:py-24">
           <div className="mx-auto max-w-7xl px-6">
-            <h2 className="font-headline text-3xl font-extrabold text-on-surface sm:text-4xl">Why rely on us?</h2>
+            <h2 className="font-headline text-3xl font-extrabold text-on-surface sm:text-4xl">{s.why_heading}</h2>
             <div className="mt-10 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {WHY_US.map((w) => (
+              {whyUs.map((w) => (
                 <div key={w.title} className="rounded-[2rem] border border-outline-variant/25 bg-surface-container-lowest p-8 shadow-sm">
                   <span className="material-symbols-outlined text-3xl text-primary">{w.icon}</span>
                   <h3 className="mt-4 font-headline text-xl font-bold text-on-surface">{w.title}</h3>
@@ -364,10 +317,10 @@ export default async function Home() {
         {/* FAQ teaser */}
         <section className="bg-surface-container-low py-20 sm:py-24">
           <div className="mx-auto max-w-3xl px-6 text-center sm:text-left">
-            <h2 className="font-headline text-3xl font-extrabold text-on-surface sm:text-4xl">FAQ&apos;s</h2>
-            <p className="mt-3 text-on-surface-variant">Quick questions — tap through for full answers on our FAQ page.</p>
+            <h2 className="font-headline text-3xl font-extrabold text-on-surface sm:text-4xl">{s.faq_heading}</h2>
+            <p className="mt-3 text-on-surface-variant">{s.faq_body}</p>
             <ul className="mt-8 space-y-3 text-left">
-              {FAQ_PREVIEW.map((q) => (
+              {faqPreview.map((q) => (
                 <li
                   key={q}
                   className="flex items-start gap-3 rounded-2xl border border-outline-variant/25 bg-surface-container-lowest px-4 py-3 text-on-surface"

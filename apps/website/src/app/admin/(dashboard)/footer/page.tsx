@@ -10,7 +10,7 @@ import { DeleteFooterGroupForm } from "@/app/admin/(dashboard)/footer/delete-foo
 import { DeleteFooterLinkForm } from "@/app/admin/(dashboard)/footer/delete-footer-link-form";
 import { AdminFlashMessages } from "@/components/admin/admin-flash-messages";
 import { AdminSubmitButton } from "@/components/admin/admin-submit-button";
-import { requireSuperAdmin } from "@/lib/admin/auth";
+import { requireMarketingManager } from "@/lib/admin/auth";
 import { createClient } from "@/lib/supabase/server";
 
 type GroupRow = {
@@ -35,7 +35,7 @@ export default async function AdminFooterPage({
 }: {
   searchParams: Record<string, string | string[] | undefined>;
 }) {
-  await requireSuperAdmin();
+  await requireMarketingManager();
   const saved = searchParams.saved === "1" || searchParams.saved === "true";
   const deleted = searchParams.deleted === "1" || searchParams.deleted === "true";
   const errorMessage = typeof searchParams.error === "string" ? searchParams.error : null;

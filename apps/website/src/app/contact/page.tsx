@@ -1,24 +1,20 @@
 import Link from "next/link";
 import { ContactForm } from "@/components/contact/contact-form";
 import { resolveClinic } from "@/lib/clinic/resolve-clinic";
-import { getMarketingLocationsOrDefaults } from "@/lib/marketing/get-marketing-site";
-import { clinicMetadata } from "@/lib/seo/clinic-metadata";
+import { getMarketingLocationsOrDefaults, getMergedPageContent } from "@/lib/marketing/get-marketing-site";
+import { applyClinicPlaceholders } from "@/lib/marketing/page-content";
+import { marketingPageMetadata } from "@/lib/marketing/page-metadata";
 import { createClient } from "@/lib/supabase/server";
 
 export async function generateMetadata() {
   const clinic = await resolveClinic();
-  return clinicMetadata({
-    clinicName: clinic.name,
-    title: `Contact ${clinic.name}`,
-    description: `Contact ${clinic.name} for appointments, emergency care, and support.`,
-    path: "/contact",
-  });
+  return marketingPageMetadata({ slug: "contact", clinicName: clinic.name, path: "/contact" });
 }
 
 export default async function ContactPage() {
   const clinic = await resolveClinic();
   const supabase = createClient();
-  const [locationsAll, branchesRes] = await Promise.all([
+  const [locationsAll, branchesRes, page] = await Promise.all([
     getMarketingLocationsOrDefaults(),
     supabase
       .from("branches")
@@ -26,8 +22,11 @@ export default async function ContactPage() {
       .eq("clinic_id", clinic.id)
       .eq("is_active", true)
       .order("name", { ascending: true }),
+    getMergedPageContent("contact"),
   ]);
   const branches = branchesRes.data;
+  const s = page.sections;
+  const t = (value: string | undefined) => applyClinicPlaceholders(value ?? "", clinic.name);
 
   /** Public site: show Phase 9 (Mohali) contact only for phone blocks. */
   const isPhase9Location = (loc: { id: string; name: string }) =>
@@ -66,11 +65,11 @@ export default async function ContactPage() {
       <div className="mx-auto max-w-7xl px-6 pb-12 pt-8 sm:pt-12">
         <header className="mb-12 text-center md:mb-16 md:text-left">
           <h1 className="mb-6 font-headline text-4xl font-extrabold tracking-tight text-on-background md:text-5xl lg:text-6xl">
-            Connect with <span className="text-primary">care</span>.
+            {t(s.title)}{" "}
+            {s.title_highlight ? <span className="text-primary">{t(s.title_highlight)}</span> : null}
+            {s.title_highlight ? "." : null}
           </h1>
-          <p className="max-w-2xl text-xl leading-relaxed text-on-surface-variant">
-            Routine questions or urgent concerns — reach {clinic.name} using the form or branch details below.
-          </p>
+          <p className="max-w-2xl text-xl leading-relaxed text-on-surface-variant">{t(s.intro)}</p>
         </header>
 
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-12 lg:gap-10">

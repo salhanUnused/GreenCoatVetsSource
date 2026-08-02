@@ -1,29 +1,26 @@
 import Link from "next/link";
 import { resolveClinic } from "@/lib/clinic/resolve-clinic";
+import { getMergedPageContent } from "@/lib/marketing/get-marketing-site";
+import { applyClinicPlaceholders } from "@/lib/marketing/page-content";
+import { marketingPageMetadata } from "@/lib/marketing/page-metadata";
 import { getMarketingTeamMembers } from "@/lib/marketing/get-team-members";
-import { clinicMetadata } from "@/lib/seo/clinic-metadata";
 
 export async function generateMetadata() {
   const clinic = await resolveClinic();
-  return clinicMetadata({
-    clinicName: clinic.name,
-    title: `${clinic.name} Team`,
-    description: `Meet the veterinary team at ${clinic.name}.`,
-    path: "/team",
-  });
+  return marketingPageMetadata({ slug: "team", clinicName: clinic.name, path: "/team" });
 }
 
 export default async function TeamPage() {
-  const members = await getMarketingTeamMembers();
+  const clinic = await resolveClinic();
+  const [members, page] = await Promise.all([getMarketingTeamMembers(), getMergedPageContent("team")]);
+  const s = page.sections;
+  const t = (value: string | undefined) => applyClinicPlaceholders(value ?? "", clinic.name);
 
   return (
     <main className="mx-auto w-full max-w-5xl space-y-8 bg-surface px-6 py-12">
       <div>
-        <h1 className="font-headline text-4xl font-extrabold text-on-surface">Our team</h1>
-        <p className="mt-4 max-w-2xl text-lg leading-relaxed text-on-surface-variant">
-          Medicine meets empathy here — a team united by one simple belief: every animal deserves to be seen, heard, and
-          loved like family.
-        </p>
+        <h1 className="font-headline text-4xl font-extrabold text-on-surface">{t(s.title)}</h1>
+        <p className="mt-4 max-w-2xl text-lg leading-relaxed text-on-surface-variant">{t(s.intro)}</p>
       </div>
 
       {members.length ? (

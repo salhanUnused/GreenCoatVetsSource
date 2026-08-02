@@ -1,16 +1,13 @@
 import { FaqAccordion, type FaqItem } from "@/components/faq/faq-accordion";
 import { resolveClinic } from "@/lib/clinic/resolve-clinic";
-import { clinicMetadata } from "@/lib/seo/clinic-metadata";
+import { getMergedPageContent } from "@/lib/marketing/get-marketing-site";
+import { applyClinicPlaceholders } from "@/lib/marketing/page-content";
+import { marketingPageMetadata } from "@/lib/marketing/page-metadata";
 import { createClient } from "@/lib/supabase/server";
 
 export async function generateMetadata() {
   const clinic = await resolveClinic();
-  return clinicMetadata({
-    clinicName: clinic.name,
-    title: `FAQ | ${clinic.name}`,
-    description: `Common questions about appointments, services, diagnostics, and emergency care at ${clinic.name}.`,
-    path: "/faq",
-  });
+  return marketingPageMetadata({ slug: "faq", clinicName: clinic.name, path: "/faq" });
 }
 
 const FAQ_ITEMS: FaqItem[] = [
@@ -113,15 +110,16 @@ export default async function FaqPage() {
         }))
       : [];
   const items = dbItems.length > 0 ? dbItems : FAQ_ITEMS;
+  const page = await getMergedPageContent("faq");
+  const s = page.sections;
+  const t = (value: string | undefined) => applyClinicPlaceholders(value ?? "", clinic.name);
 
   return (
     <main className="bg-surface pb-20">
       <div className="mx-auto max-w-3xl px-6 py-12 sm:py-16">
-        <p className="font-label text-sm font-bold uppercase tracking-widest text-primary">FAQ</p>
-        <h1 className="mt-2 font-headline text-4xl font-extrabold text-on-surface sm:text-5xl">Questions &amp; answers</h1>
-        <p className="mt-4 text-lg text-on-surface-variant">
-          Straight answers about care at {clinic.name}. Tap a question to expand.
-        </p>
+        <p className="font-label text-sm font-bold uppercase tracking-widest text-primary">{t(s.eyebrow)}</p>
+        <h1 className="mt-2 font-headline text-4xl font-extrabold text-on-surface sm:text-5xl">{t(s.title)}</h1>
+        <p className="mt-4 text-lg text-on-surface-variant">{t(s.intro)}</p>
         <div className="mt-10">
           <FaqAccordion items={items} />
         </div>

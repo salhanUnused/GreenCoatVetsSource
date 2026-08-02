@@ -5,8 +5,11 @@ export function clinicMetadata(input: {
   title: string;
   description: string;
   path?: string;
+  /** Optional Open Graph / Twitter image URL from CMS. */
+  ogImageUrl?: string | null;
 }): Metadata {
-  const { clinicName, title, description, path = "/" } = input;
+  const { clinicName, title, description, path = "/", ogImageUrl } = input;
+  const images = ogImageUrl?.trim() ? [{ url: ogImageUrl.trim() }] : undefined;
   return {
     title,
     description,
@@ -17,11 +20,13 @@ export function clinicMetadata(input: {
       siteName: clinicName,
       type: "website",
       url: path,
+      ...(images ? { images } : {}),
     },
     twitter: {
       card: "summary_large_image",
       title,
       description,
+      ...(images ? { images: images.map((i) => i.url) } : {}),
     },
     robots: { index: true, follow: true },
   };

@@ -10,6 +10,12 @@ import { parseInstagramEmbedUrlsBlock } from "@/lib/marketing/instagram-embed-ur
 import { parseGalleryImageUrlsBlock } from "@/lib/marketing/gallery-welcome-video";
 import { fetchInstagramMediaPermalinks, getInstagramGraphEnv } from "@/lib/marketing/instagram-graph-media";
 import { validateSquarePngUpload } from "@saasclinics/lib";
+import {
+  getMarketingPageDef,
+  isMarketingPageSlug,
+  type MarketingPageContent,
+  type MarketingPageContentMap,
+} from "@/lib/marketing/page-content";
 
 async function requireSuperAdmin() {
   await assertSuperAdmin();
@@ -174,7 +180,7 @@ export async function refreshInstagramEmbedsFromGraph() {
 }
 
 export async function addMarketingLocation(formData: FormData) {
-  const supabase = await requireSuperAdmin();
+  const supabase = await requireMarketingManagerClient();
 
   const name = (formData.get("name") as string)?.trim();
   if (!name) throw new Error("Name is required");
@@ -211,7 +217,7 @@ export async function addMarketingLocation(formData: FormData) {
 }
 
 export async function updateMarketingLocation(formData: FormData) {
-  const supabase = await requireSuperAdmin();
+  const supabase = await requireMarketingManagerClient();
   const id = formData.get("id") as string;
   if (!id) throw new Error("Missing id");
 
@@ -253,7 +259,7 @@ export async function updateMarketingLocation(formData: FormData) {
 }
 
 export async function deleteMarketingLocation(formData: FormData) {
-  const supabase = await requireSuperAdmin();
+  const supabase = await requireMarketingManagerClient();
   const id = formData.get("id") as string;
   if (!id) throw new Error("Missing id");
 
@@ -267,7 +273,7 @@ export async function deleteMarketingLocation(formData: FormData) {
 }
 
 export async function addMarketingFaq(formData: FormData) {
-  const supabase = await requireSuperAdmin();
+  const supabase = await requireMarketingManagerClient();
   const question = (formData.get("question") as string | null)?.trim() ?? "";
   const answer = (formData.get("answer") as string | null)?.trim() ?? "";
   const sort_order = Number(formData.get("sort_order") || 0);
@@ -289,7 +295,7 @@ export async function addMarketingFaq(formData: FormData) {
 }
 
 export async function updateMarketingFaq(formData: FormData) {
-  const supabase = await requireSuperAdmin();
+  const supabase = await requireMarketingManagerClient();
   const id = (formData.get("id") as string | null)?.trim() ?? "";
   const question = (formData.get("question") as string | null)?.trim() ?? "";
   const answer = (formData.get("answer") as string | null)?.trim() ?? "";
@@ -315,7 +321,7 @@ export async function updateMarketingFaq(formData: FormData) {
 }
 
 export async function deleteMarketingFaq(formData: FormData) {
-  const supabase = await requireSuperAdmin();
+  const supabase = await requireMarketingManagerClient();
   const id = (formData.get("id") as string | null)?.trim() ?? "";
   if (!id) {
     redirect("/admin/faqs?error=Missing%20FAQ%20id.");
@@ -472,7 +478,7 @@ export async function deleteMarketingPopup(formData: FormData) {
 }
 
 export async function updateMarketingSeoSettings(formData: FormData) {
-  const supabase = await requireSuperAdmin();
+  const supabase = await requireMarketingManagerClient();
 
   const { data: existingRow } = await supabase
     .from("marketing_site_settings")
@@ -511,7 +517,7 @@ export async function updateMarketingSeoSettings(formData: FormData) {
 }
 
 export async function recordSitemapPingAction() {
-  const supabase = await requireSuperAdmin();
+  const supabase = await requireMarketingManagerClient();
   const { data: existingRow } = await supabase
     .from("marketing_site_settings")
     .select("seo_settings")
@@ -719,4 +725,77 @@ export async function clearWebsiteFavicon() {
   revalidatePath("/apple-icon");
   revalidatePath("/admin/settings");
   redirect("/admin/settings?favicon_cleared=1");
+}
+
+export async function saveMarketingPageContent(formData: FormData) {
+  const supabase = await requireMarketingManagerClient();
+
+  const slugRaw = String(formData.get("slug") ?? "").trim();
+  if (!isMarketingPageSlug(slugRaw)) {
+    redirect(`/admin/pages?error=${encodeURIComponent("Unknown page")}`);
+  }
+  const slug = slugRaw;
+  const def = getMarketingPageDef(slug);
+
+  const { data: existingRow } = await supabase
+    .from("marketing_site_settings")
+    .select("page_content")
+    .eq("id", "default")
+    .maybeSingle();
+
+  const prevMap = ((existingRow as { page_content?: MarketingPageContentMap | null } | null)?.page_content ??
+    {}) as MarketingPageContentMap;
+
+  const sections: Record<string, string> = {};
+  let seo_title = "";
+  let seo_description = "";
+  let og_image_url = "";
+
+  for (const field of def.fields) {
+    const v = String(formData.get(`field_${field.key}`) ?? "").trim();
+    if (field.key === "seo_title") {
+      seo_title = v;
+      continue;
+    }
+    if (field.key === "seo_description") {
+      seo_description = v;
+      continue;
+    }
+    if (field.key === "og_image_url") {
+      og_image_url = v;
+      continue;
+    }
+    if (v) sections[field.key] = v;
+  }
+
+  const pageEntry: MarketingPageContent = {
+    ...(seo_title ? { seo_title } : {}),
+    ...(seo_description ? { seo_description } : {}),
+    ...(og_image_url ? { og_image_url } : {}),
+    sections,
+  };
+
+  const page_content: MarketingPageContentMap = {
+    ...prevMap,
+    [slug]: pageEntry,
+  };
+
+  const { error } = await supabase.from("marketing_site_settings").upsert(
+    {
+      id: "default",
+      page_content,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "id" },
+  );
+
+  if (error) {
+    redirect(`/admin/pages/${slug}?error=${encodeURIComponent(error.message)}`);
+  }
+
+  revalidatePath("/", "layout");
+  revalidatePath(def.path);
+  revalidatePath("/admin/pages");
+  revalidatePath(`/admin/pages/${slug}`);
+  redirect(`/admin/pages/${slug}?saved=1`);
 }

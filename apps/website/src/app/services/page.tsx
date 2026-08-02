@@ -1,23 +1,22 @@
 import Link from "next/link";
-import { clinicMetadata } from "@/lib/seo/clinic-metadata";
 import { resolveClinic } from "@/lib/clinic/resolve-clinic";
+import { getMergedPageContent } from "@/lib/marketing/get-marketing-site";
+import { applyClinicPlaceholders } from "@/lib/marketing/page-content";
+import { marketingPageMetadata } from "@/lib/marketing/page-metadata";
 import { createClient } from "@/lib/supabase/server";
-
-const HERO_IMG =
-  "https://lh3.googleusercontent.com/aida-public/AB6AXuAHUiXkY-fn0in9W3DlhWSv8ENOuzy4zY3KnYqrx1JMX6L3C1iYNuSlKS80AUAkN47y4Mz9swZ-u00KGs5fFSfZiHRh1Me7Km0FSOBVwDRfyP9G3D10TVE8NbwkfUM7_OMMUmY1aiZ1NoyznRC9IcxwnbCUC361vju4_QlaFcfK6Py9nneWD8NSQHwWvsgakq3ZK8tpOcEkQ6h8IAmSfTxydDDgnxFQEi2i4GwztU9USTquiWkltMFDEDqez14KGs3F5qM6Tc_0sVM";
 
 export async function generateMetadata() {
   const clinic = await resolveClinic();
-  return clinicMetadata({
-    clinicName: clinic.name,
-    title: `${clinic.name} Services`,
-    description: `Explore veterinary services at ${clinic.name}.`,
-    path: "/services",
-  });
+  return marketingPageMetadata({ slug: "services", clinicName: clinic.name, path: "/services" });
 }
 
 export default async function ServicesPage() {
   const clinic = await resolveClinic();
+  const page = await getMergedPageContent("services");
+  const s = page.sections;
+  const t = (value: string | undefined) => applyClinicPlaceholders(value ?? "", clinic.name);
+  const heroImg = s.hero_image_url?.trim() || "";
+
   const supabase = createClient();
   const { data: services, error } = await supabase
     .from("services")
@@ -42,42 +41,38 @@ export default async function ServicesPage() {
       <section className="mx-auto max-w-7xl px-6 pb-12 pt-8 sm:pb-16 sm:pt-12">
         <div className="grid grid-cols-1 items-center gap-10 lg:grid-cols-2 lg:gap-12">
           <div>
-            <span className="mb-4 block text-xs font-bold uppercase tracking-widest text-primary">Medical excellence</span>
+            <span className="mb-4 block text-xs font-bold uppercase tracking-widest text-primary">{t(s.eyebrow)}</span>
             <h1 className="mb-6 font-headline text-4xl font-extrabold leading-tight tracking-tight text-on-surface md:text-5xl lg:text-6xl">
-              Expert care for every life stage
+              {t(s.title)}
             </h1>
-            <p className="mb-8 max-w-xl text-lg leading-relaxed text-on-surface-variant">
-              Advanced medicine with a calm experience — services available at {clinic.name}.
-            </p>
+            <p className="mb-8 max-w-xl text-lg leading-relaxed text-on-surface-variant">{t(s.subtitle)}</p>
             <div className="flex flex-wrap gap-3">
               <div className="flex items-center gap-2 rounded-full bg-primary-fixed px-4 py-2 text-sm font-medium text-on-primary-fixed">
                 <span className="material-symbols-outlined text-sm">verified</span>
-                Evidence-based protocols
+                {t(s.badge_1)}
               </div>
               <div className="flex items-center gap-2 rounded-full bg-secondary-container px-4 py-2 text-sm font-medium text-on-secondary-container">
                 <span className="material-symbols-outlined text-sm">emergency</span>
-                Coordinated urgent access
+                {t(s.badge_2)}
               </div>
             </div>
           </div>
-          <div className="relative h-[280px] overflow-hidden rounded-3xl shadow-2xl sm:h-[360px] lg:h-[400px]">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={HERO_IMG} alt="" className="h-full w-full object-cover" />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
-          </div>
+          {heroImg ? (
+            <div className="relative h-[280px] overflow-hidden rounded-3xl shadow-2xl sm:h-[360px] lg:h-[400px]">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={heroImg} alt="" className="h-full w-full object-cover" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
+            </div>
+          ) : null}
         </div>
       </section>
 
       <section className="mx-auto max-w-7xl px-6">
         {!services?.length ? (
           <div className="rounded-[2rem] border border-primary/15 bg-primary/5 p-8 sm:p-12">
-            <p className="mb-2 text-xs font-bold uppercase tracking-widest text-primary">Facilities</p>
-            <h2 className="font-headline text-2xl font-extrabold text-on-surface md:text-3xl">
-              Complete care under one roof — tailored to what your pet needs.
-            </h2>
-            <p className="mt-4 max-w-3xl text-lg leading-relaxed text-on-surface-variant">
-              While your clinic catalogue is being set up, here is what families can expect at {clinic.name}.
-            </p>
+            <p className="mb-2 text-xs font-bold uppercase tracking-widest text-primary">{t(s.empty_eyebrow)}</p>
+            <h2 className="font-headline text-2xl font-extrabold text-on-surface md:text-3xl">{t(s.empty_heading)}</h2>
+            <p className="mt-4 max-w-3xl text-lg leading-relaxed text-on-surface-variant">{t(s.empty_body)}</p>
             <div className="mt-10 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
               {defaultFacilities.map((f) => (
                 <article

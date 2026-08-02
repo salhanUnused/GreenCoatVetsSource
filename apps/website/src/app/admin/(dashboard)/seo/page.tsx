@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireSuperAdmin } from "@/lib/admin/auth";
+import { requireMarketingManager } from "@/lib/admin/auth";
 import { getMarketingSiteSettings } from "@/lib/marketing/get-marketing-site";
 import { buildMarketingSitemapEntries, sitemapEntriesToXml } from "@/lib/seo/build-sitemap-entries";
 import { DEFAULT_PUBLIC_WEBSITE_ORIGIN, getWebsitePublicBaseUrlFromRequest } from "@/lib/seo/public-site-url";
@@ -11,7 +11,7 @@ export default async function AdminSeoPage({
 }: {
   searchParams?: Record<string, string | string[] | undefined>;
 }) {
-  await requireSuperAdmin();
+  await requireMarketingManager();
   const sp = searchParams ?? {};
   const marketing = await getMarketingSiteSettings();
   const base = await getWebsitePublicBaseUrlFromRequest(marketing.seo_settings);

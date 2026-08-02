@@ -11,6 +11,12 @@ import type { MarketingSeoSettings } from "./seo-types";
 import { EMPTY_SEO_SETTINGS } from "./seo-types";
 import type { MarketingLocationPublic } from "./types";
 import { resolveMarketingImageUrl } from "./resolve-marketing-image-url";
+import {
+  mergePageContent,
+  type MarketingPageContent,
+  type MarketingPageContentMap,
+  type MarketingPageSlug,
+} from "./page-content";
 
 export type MarketingSiteSettingsRow = {
   /** When no host match, used after `website_branded_for_clinic_id` is tried. */
@@ -30,6 +36,8 @@ export type MarketingSiteSettingsRow = {
   welcome_video_url: string | null;
   seo_settings: MarketingSeoSettings;
   website_favicon_url: string | null;
+  /** Per-page SEO + section copy keyed by marketing page slug. */
+  page_content: MarketingPageContentMap;
 };
 
 const EMPTY: MarketingSiteSettingsRow = {
@@ -44,6 +52,7 @@ const EMPTY: MarketingSiteSettingsRow = {
   welcome_video_url: null,
   seo_settings: { ...EMPTY_SEO_SETTINGS },
   website_favicon_url: null,
+  page_content: {},
 };
 
 export async function getMarketingSiteSettings(): Promise<MarketingSiteSettingsRow> {
@@ -51,7 +60,7 @@ export async function getMarketingSiteSettings(): Promise<MarketingSiteSettingsR
   const { data, error } = await supabase
     .from("marketing_site_settings")
     .select(
-      "default_clinic_id, website_branded_for_clinic_id, contact_form_recipient_email, homepage_images, social_links, homepage_copy, instagram_embed_urls, gallery_image_urls, welcome_video_url, seo_settings, website_favicon_url",
+      "default_clinic_id, website_branded_for_clinic_id, contact_form_recipient_email, homepage_images, social_links, homepage_copy, instagram_embed_urls, gallery_image_urls, welcome_video_url, seo_settings, website_favicon_url, page_content",
     )
     .eq("id", "default")
     .maybeSingle();
@@ -79,6 +88,10 @@ export async function getMarketingSiteSettings(): Promise<MarketingSiteSettingsR
   const seo_settings: MarketingSeoSettings =
     rawSeo && typeof rawSeo === "object" ? { ...EMPTY_SEO_SETTINGS, ...rawSeo } : { ...EMPTY_SEO_SETTINGS };
 
+  const rawPageContent = (data as { page_content?: MarketingPageContentMap | null }).page_content;
+  const page_content: MarketingPageContentMap =
+    rawPageContent && typeof rawPageContent === "object" ? rawPageContent : {};
+
   return {
     default_clinic_id: data.default_clinic_id as string | null,
     website_branded_for_clinic_id: (data as { website_branded_for_clinic_id?: string | null })
@@ -94,7 +107,19 @@ export async function getMarketingSiteSettings(): Promise<MarketingSiteSettingsR
     welcome_video_url,
     seo_settings,
     website_favicon_url: ((data as { website_favicon_url?: string | null }).website_favicon_url as string | null)?.trim() || null,
+    page_content,
   };
+}
+
+/** Deep-merge DB page content over code defaults for a marketing page slug. */
+export function getPageContent(slug: MarketingPageSlug, pageContentMap?: MarketingPageContentMap | null) {
+  const db = pageContentMap?.[slug] as MarketingPageContent | undefined;
+  return mergePageContent(slug, db);
+}
+
+export async function getMergedPageContent(slug: MarketingPageSlug) {
+  const settings = await getMarketingSiteSettings();
+  return getPageContent(slug, settings.page_content);
 }
 
 export function mergeHomepageImages(db: Record<string, string>): Record<HomepageImageKey, string> {

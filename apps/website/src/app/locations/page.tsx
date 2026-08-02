@@ -5,24 +5,24 @@ import { getDirectionsUrl } from "@/lib/marketing/default-locations";
 import {
   getMarketingLocationsOrDefaults,
   getMarketingSiteSettings,
+  getPageContent,
   mergeHomepageImages,
 } from "@/lib/marketing/get-marketing-site";
-import { clinicMetadata } from "@/lib/seo/clinic-metadata";
+import { applyClinicPlaceholders } from "@/lib/marketing/page-content";
+import { marketingPageMetadata } from "@/lib/marketing/page-metadata";
 
 export async function generateMetadata() {
   const clinic = await resolveClinic();
-  return clinicMetadata({
-    clinicName: clinic.name,
-    title: `Locations | ${clinic.name}`,
-    description: `GreenCoatVets clinics across Tricity, Punjab & beyond — addresses, phone numbers, and hours.`,
-    path: "/locations",
-  });
+  return marketingPageMetadata({ slug: "locations", clinicName: clinic.name, path: "/locations" });
 }
 
 export default async function LocationsPage() {
   const clinic = await resolveClinic();
   const marketing = await getMarketingSiteSettings();
   const imgs = mergeHomepageImages(marketing.homepage_images);
+  const page = getPageContent("locations", marketing.page_content);
+  const s = page.sections;
+  const t = (value: string | undefined) => applyClinicPlaceholders(value ?? "", clinic.name);
   const locations = await getMarketingLocationsOrDefaults();
   const pinnedCount = locations.filter(
     (l) => l.latitude != null && l.longitude != null && Number.isFinite(l.latitude) && Number.isFinite(l.longitude),
@@ -34,15 +34,13 @@ export default async function LocationsPage() {
       <header className="mx-auto mb-12 max-w-7xl px-6 pt-8 sm:mb-16 sm:pt-12">
         <div className="flex flex-col justify-between gap-6 md:flex-row md:items-end">
           <div className="max-w-2xl">
-            <span className="mb-4 block font-headline text-xs font-bold uppercase tracking-widest text-primary">Our presence</span>
+            <span className="mb-4 block font-headline text-xs font-bold uppercase tracking-widest text-primary">{t(s.eyebrow)}</span>
             <h1 className="font-headline text-4xl font-extrabold tracking-tight text-on-surface md:text-5xl lg:text-6xl">
-              Clinical sanctuary <br className="hidden sm:block" />
-              at your <span className="text-primary">doorstep</span>
+              {t(s.title_line1)} <br className="hidden sm:block" />
+              at your <span className="text-primary">{t(s.title_highlight)}</span>
             </h1>
           </div>
-          <p className="max-w-md text-lg leading-relaxed text-on-surface-variant">
-            Visit {clinic.name} across the region — call ahead or book online. Directions open in Google Maps.
-          </p>
+          <p className="max-w-md text-lg leading-relaxed text-on-surface-variant">{t(s.intro)}</p>
         </div>
       </header>
 

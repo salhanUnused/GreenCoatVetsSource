@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter, Manrope } from "next/font/google";
 import "./globals.css";
 import { MarketingShell } from "@/components/site/marketing-shell";
+import { GoogleHeadTags, GoogleTagManagerNoscript } from "@/components/site/google-tags";
 import { resolveClinic } from "@/lib/clinic/resolve-clinic";
 import { getMarketingFooterNav } from "@/lib/marketing/footer-nav";
 import { getMarketingSiteSettings, mergeHomepageCopy } from "@/lib/marketing/get-marketing-site";
@@ -67,6 +68,7 @@ export default async function RootLayout({
   return (
     <html lang="en" className={`scroll-smooth ${inter.variable} ${manrope.variable}`}>
       <head>
+        <GoogleHeadTags />
         <link rel="icon" href={faviconHref} type="image/png" sizes="48x48" />
         <link rel="shortcut icon" href={faviconHref} type="image/png" />
         <link rel="apple-touch-icon" href={faviconHref} sizes="180x180" />
@@ -77,6 +79,7 @@ export default async function RootLayout({
         />
       </head>
       <body className={inter.className}>
+        <GoogleTagManagerNoscript />
         <StoreProviders storeEnabled={branding.website_store_enabled}>
           <MarketingShell
             productName={branding.product_name}

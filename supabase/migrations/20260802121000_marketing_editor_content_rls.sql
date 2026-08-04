@@ -1,42 +1,39 @@
 -- Allow marketing editors to manage FAQs, locations, and footer (content tools).
+-- Acquire exclusive locks in a fixed order first to avoid deadlocks with live traffic.
+-- ALTER POLICY (in place) is safer than DROP+CREATE rename churn.
 
-drop policy if exists marketing_locations_super_admin on public.marketing_locations;
-create policy marketing_locations_manager_write
-on public.marketing_locations
-for all
-to authenticated
-using (public.is_super_admin() or public.is_marketing_editor())
-with check (public.is_super_admin() or public.is_marketing_editor());
+begin;
 
-drop policy if exists marketing_faqs_public_read on public.marketing_faqs;
-create policy marketing_faqs_public_read on public.marketing_faqs
-for select
-to anon, authenticated
-using (is_active = true or public.is_super_admin() or public.is_marketing_editor());
+set local lock_timeout = '30s';
+set local deadlock_timeout = '1s';
 
-drop policy if exists marketing_faqs_super_admin_write on public.marketing_faqs;
-create policy marketing_faqs_manager_write on public.marketing_faqs
-for all
-to authenticated
-using (public.is_super_admin() or public.is_marketing_editor())
-with check (public.is_super_admin() or public.is_marketing_editor());
+lock table
+  public.marketing_locations,
+  public.marketing_faqs,
+  public.marketing_footer_groups,
+  public.marketing_footer_links
+in access exclusive mode;
 
-drop policy if exists marketing_footer_groups_write on public.marketing_footer_groups;
-create policy marketing_footer_groups_manager_write on public.marketing_footer_groups
-for all
-to authenticated
-using (public.is_super_admin() or public.is_marketing_editor())
-with check (public.is_super_admin() or public.is_marketing_editor());
+alter policy marketing_locations_super_admin on public.marketing_locations
+  using (public.is_super_admin() or public.is_marketing_editor())
+  with check (public.is_super_admin() or public.is_marketing_editor());
 
-drop policy if exists marketing_footer_links_select on public.marketing_footer_links;
-create policy marketing_footer_links_select on public.marketing_footer_links
-for select
-to anon, authenticated
-using (is_active = true or public.is_super_admin() or public.is_marketing_editor());
+alter policy marketing_faqs_public_read on public.marketing_faqs
+  using (is_active = true or public.is_super_admin() or public.is_marketing_editor());
 
-drop policy if exists marketing_footer_links_write on public.marketing_footer_links;
-create policy marketing_footer_links_manager_write on public.marketing_footer_links
-for all
-to authenticated
-using (public.is_super_admin() or public.is_marketing_editor())
-with check (public.is_super_admin() or public.is_marketing_editor());
+alter policy marketing_faqs_super_admin_write on public.marketing_faqs
+  using (public.is_super_admin() or public.is_marketing_editor())
+  with check (public.is_super_admin() or public.is_marketing_editor());
+
+alter policy marketing_footer_groups_write on public.marketing_footer_groups
+  using (public.is_super_admin() or public.is_marketing_editor())
+  with check (public.is_super_admin() or public.is_marketing_editor());
+
+alter policy marketing_footer_links_select on public.marketing_footer_links
+  using (is_active = true or public.is_super_admin() or public.is_marketing_editor());
+
+alter policy marketing_footer_links_write on public.marketing_footer_links
+  using (public.is_super_admin() or public.is_marketing_editor())
+  with check (public.is_super_admin() or public.is_marketing_editor());
+
+commit;

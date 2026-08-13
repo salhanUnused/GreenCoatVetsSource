@@ -97,7 +97,10 @@ export function isSuppressedPublicLocation(loc: Pick<MarketingLocationPublic, "i
 }
 
 export function getDirectionsUrl(loc: MarketingLocationPublic): string {
-  if (loc.directionsUrl?.trim()) return loc.directionsUrl;
-  const q = loc.addressLines.join(" ");
-  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
+  const direct = typeof loc?.directionsUrl === "string" ? loc.directionsUrl.trim() : "";
+  if (direct) return direct;
+  const lines = Array.isArray(loc?.addressLines) ? loc.addressLines : [];
+  const q = lines.filter((line) => typeof line === "string" && line.trim()).join(" ");
+  const fallback = typeof loc?.name === "string" && loc.name.trim() ? loc.name : "veterinary clinic";
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q || fallback)}`;
 }

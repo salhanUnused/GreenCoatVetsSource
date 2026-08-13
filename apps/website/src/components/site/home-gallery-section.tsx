@@ -3,9 +3,10 @@ export function HomeGallerySection({
   urls,
 }: {
   clinicName: string;
-  urls: string[];
+  urls: string[] | null | undefined;
 }) {
-  if (!urls.length) return null;
+  const list = Array.isArray(urls) ? urls : [];
+  if (!list.length) return null;
 
   return (
     <section className="bg-surface py-20 sm:py-24" aria-labelledby="clinic-gallery-heading">
@@ -20,7 +21,7 @@ export function HomeGallerySection({
           </p>
         </div>
         <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-4">
-          {urls.map((url, index) => (
+          {list.map((url, index) => (
             <figure
               key={`${url}-${index}`}
               className={`overflow-hidden rounded-2xl border border-outline-variant/25 bg-surface-container-lowest shadow-sm ${

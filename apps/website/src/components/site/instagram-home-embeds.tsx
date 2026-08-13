@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId } from "react";
+import { useEffect, useId, useMemo } from "react";
 
 declare global {
   interface Window {
@@ -38,22 +38,26 @@ function loadEmbedScript(): Promise<void> {
 }
 
 export function InstagramHomeEmbeds({
-  urls,
+  urls = [],
   eyebrow,
   heading,
   body,
   profileUrl,
 }: {
-  urls: string[];
+  urls?: string[] | null;
   eyebrow: string;
   heading: string;
   body: string;
   profileUrl?: string | null;
 }) {
   const headingId = useId();
+  const list = useMemo(
+    () => (Array.isArray(urls) ? urls.filter((u) => typeof u === "string" && u.trim()) : []),
+    [urls],
+  );
 
   useEffect(() => {
-    if (!urls.length) return;
+    if (!list.length) return;
     let cancelled = false;
     const run = async () => {
       try {
@@ -72,7 +76,7 @@ export function InstagramHomeEmbeds({
       cancelled = true;
       window.clearTimeout(t);
     };
-  }, [urls]);
+  }, [list]);
 
   return (
     <section className="bg-surface py-16 sm:py-20" aria-labelledby={headingId}>
@@ -96,9 +100,9 @@ export function InstagramHomeEmbeds({
             </a>
           ) : null}
         </div>
-        {urls.length ? (
+        {list.length ? (
         <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
-          {urls.map((permalink) => (
+          {list.map((permalink) => (
             <div
               key={permalink}
               className="flex min-h-[480px] justify-center overflow-hidden rounded-[2rem] border border-outline-variant/25 bg-surface-container-lowest p-4 shadow-sm sm:min-h-[520px]"

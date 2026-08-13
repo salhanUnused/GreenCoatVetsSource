@@ -9,7 +9,8 @@ export function clinicMetadata(input: {
   ogImageUrl?: string | null;
 }): Metadata {
   const { clinicName, title, description, path = "/", ogImageUrl } = input;
-  const images = ogImageUrl?.trim() ? [{ url: ogImageUrl.trim() }] : undefined;
+  const og = typeof ogImageUrl === "string" ? ogImageUrl.trim() : "";
+  const images = /^https?:\/\//i.test(og) ? [{ url: og }] : undefined;
   return {
     title,
     description,

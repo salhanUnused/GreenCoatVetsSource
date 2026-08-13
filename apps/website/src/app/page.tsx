@@ -59,10 +59,10 @@ export default async function Home() {
     getMarketingTeamMembers(),
   ]);
   const images = mergeHomepageImages(marketing.homepage_images);
-  const heroSlides = buildHeroSlideUrls(images, marketing.homepage_images);
-  const page = getPageContent("home", marketing.page_content);
-  const s = page.sections;
-  const t = (value: string | undefined) => applyClinicPlaceholders(value ?? "", clinic.name);
+  const heroSlides = buildHeroSlideUrls(images, marketing.homepage_images ?? {});
+  const page = getPageContent("home", marketing.page_content ?? {});
+  const s = page.sections ?? {};
+  const t = (value: string | undefined) => applyClinicPlaceholders(value ?? "", clinic.name ?? "");
   const serviceCards = sectionTitleBodyLines(s, "services_list");
   const faqPreview = sectionLines(s, "faq_preview_list");
   const whyUs = [1, 2, 3, 4, 5, 6]
@@ -75,8 +75,11 @@ export default async function Home() {
   const promiseParas = sectionParagraphs(s, "promise_body").map(t);
   const surgeryParas = sectionParagraphs(s, "surgery_body").map(t);
   const ctaParas = sectionParagraphs(s, "cta_body").map(t);
-  const instagramUrl = marketing.social_links.instagram_url?.trim() || "https://www.instagram.com";
-  const facebookUrl = marketing.social_links.facebook_url?.trim() || "https://www.facebook.com";
+  const social = marketing.social_links ?? {};
+  const instagramUrl =
+    (typeof social.instagram_url === "string" && social.instagram_url.trim()) || "https://www.instagram.com";
+  const facebookUrl =
+    (typeof social.facebook_url === "string" && social.facebook_url.trim()) || "https://www.facebook.com";
 
   const homepageLocationCards = [
     {
@@ -99,20 +102,25 @@ export default async function Home() {
   ].filter((card) => card.loc);
 
   const supabase = createClient();
-  const { data: reviews } = await supabase
-    .from("marketing_reviews")
-    .select("id, reviewer_name, pet_name, message, stars, owner_image_url")
-    .eq("is_active", true)
-    .order("sort_order", { ascending: true })
-    .order("created_at", { ascending: true })
-    .limit(8);
-  const testimonialRows =
-    reviews?.map((row) => ({
-      quote: row.message as string,
-      label: `${row.pet_name} - ${row.reviewer_name}`,
-      img: (row.owner_image_url as string | null) ?? "",
-      stars: Number(row.stars ?? 5),
-    })) ?? [];
+  let testimonialRows: { quote: string; label: string; img: string; stars: number }[] = [];
+  try {
+    const { data: reviews } = await supabase
+      .from("marketing_reviews")
+      .select("id, reviewer_name, pet_name, message, stars, owner_image_url")
+      .eq("is_active", true)
+      .order("sort_order", { ascending: true })
+      .order("created_at", { ascending: true })
+      .limit(8);
+    testimonialRows =
+      reviews?.map((row) => ({
+        quote: row.message as string,
+        label: `${row.pet_name} - ${row.reviewer_name}`,
+        img: (row.owner_image_url as string | null) ?? "",
+        stars: Number(row.stars ?? 5),
+      })) ?? [];
+  } catch {
+    testimonialRows = [];
+  }
 
   const localBusinessLd = {
     "@context": "https://schema.org",
@@ -260,7 +268,7 @@ export default async function Home() {
 
         <HomeWelcomeVideoSection clinicName={clinic.name} videoUrl={marketing.welcome_video_url} />
 
-        <HomeGallerySection clinicName={clinic.name} urls={marketing.gallery_image_urls} />
+        <HomeGallerySection clinicName={clinic.name} urls={marketing.gallery_image_urls ?? []} />
 
         <HomeTeamSection
           members={teamMembers}
@@ -342,7 +350,8 @@ export default async function Home() {
             <p className="mt-3 max-w-3xl text-on-surface-variant">{t(s.locations_intro)}</p>
             <div className="mt-10 grid gap-8 md:grid-cols-3">
               {homepageLocationCards.map((card) => {
-                const loc = card.loc!;
+                const loc = card.loc;
+                if (!loc) return null;
                 return (
                   <address
                     key={loc.id}

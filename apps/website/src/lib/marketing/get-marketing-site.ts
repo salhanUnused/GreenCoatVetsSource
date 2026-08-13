@@ -56,18 +56,29 @@ const EMPTY: MarketingSiteSettingsRow = {
 };
 
 export async function getMarketingSiteSettings(): Promise<MarketingSiteSettingsRow> {
-  const supabase = createClient();
-  const { data, error } = await supabase
-    .from("marketing_site_settings")
-    .select(
-      "default_clinic_id, website_branded_for_clinic_id, contact_form_recipient_email, homepage_images, social_links, homepage_copy, instagram_embed_urls, gallery_image_urls, welcome_video_url, seo_settings, website_favicon_url, page_content",
-    )
-    .eq("id", "default")
-    .maybeSingle();
+  try {
+    const supabase = createClient();
+    const columns =
+      "default_clinic_id, website_branded_for_clinic_id, contact_form_recipient_email, homepage_images, social_links, homepage_copy, instagram_embed_urls, gallery_image_urls, welcome_video_url, seo_settings, website_favicon_url, page_content";
+    const first = await supabase.from("marketing_site_settings").select(columns).eq("id", "default").maybeSingle();
+    let data: Record<string, unknown> | null = first.data as Record<string, unknown> | null;
+    let error = first.error;
 
-  if (error || !data) {
-    return { ...EMPTY };
-  }
+    if (error && /page_content/i.test(error.message ?? "")) {
+      const retry = await supabase
+        .from("marketing_site_settings")
+        .select(
+          "default_clinic_id, website_branded_for_clinic_id, contact_form_recipient_email, homepage_images, social_links, homepage_copy, instagram_embed_urls, gallery_image_urls, welcome_video_url, seo_settings, website_favicon_url",
+        )
+        .eq("id", "default")
+        .maybeSingle();
+      data = retry.data as Record<string, unknown> | null;
+      error = retry.error;
+    }
+
+    if (error || !data) {
+      return { ...EMPTY };
+    }
 
   const rawEmbeds = (data as { instagram_embed_urls?: unknown }).instagram_embed_urls;
   const instagram_embed_urls = Array.isArray(rawEmbeds)
@@ -82,38 +93,61 @@ export async function getMarketingSiteSettings(): Promise<MarketingSiteSettingsR
     : [];
 
   const welcome_video_url =
-    ((data as { welcome_video_url?: string | null }).welcome_video_url as string | null)?.trim() || null;
+    typeof (data as { welcome_video_url?: string | null }).welcome_video_url === "string"
+      ? ((data as { welcome_video_url?: string | null }).welcome_video_url as string).trim() || null
+      : null;
 
   const rawSeo = (data as { seo_settings?: MarketingSeoSettings | null }).seo_settings;
   const seo_settings: MarketingSeoSettings =
-    rawSeo && typeof rawSeo === "object" ? { ...EMPTY_SEO_SETTINGS, ...rawSeo } : { ...EMPTY_SEO_SETTINGS };
+    rawSeo && typeof rawSeo === "object" && !Array.isArray(rawSeo) ? { ...EMPTY_SEO_SETTINGS, ...rawSeo } : { ...EMPTY_SEO_SETTINGS };
 
   const rawPageContent = (data as { page_content?: MarketingPageContentMap | null }).page_content;
   const page_content: MarketingPageContentMap =
-    rawPageContent && typeof rawPageContent === "object" ? rawPageContent : {};
+    rawPageContent && typeof rawPageContent === "object" && !Array.isArray(rawPageContent) ? rawPageContent : {};
 
-  return {
-    default_clinic_id: data.default_clinic_id as string | null,
-    website_branded_for_clinic_id: (data as { website_branded_for_clinic_id?: string | null })
-      .website_branded_for_clinic_id ?? null,
-    contact_form_recipient_email:
-      ((data as { contact_form_recipient_email?: string | null }).contact_form_recipient_email as string | null)?.trim() ||
-      null,
-    homepage_images: (data.homepage_images as Record<string, string>) ?? {},
-    social_links: (data.social_links as SocialLinks) ?? {},
-    homepage_copy: ((data as { homepage_copy?: HomepageCopy | null }).homepage_copy as HomepageCopy) ?? {},
-    instagram_embed_urls,
-    gallery_image_urls,
-    welcome_video_url,
-    seo_settings,
-    website_favicon_url: ((data as { website_favicon_url?: string | null }).website_favicon_url as string | null)?.trim() || null,
-    page_content,
-  };
+    const homepage_images =
+      data.homepage_images && typeof data.homepage_images === "object" && !Array.isArray(data.homepage_images)
+        ? (data.homepage_images as Record<string, string>)
+        : {};
+    const social_links =
+      data.social_links && typeof data.social_links === "object" && !Array.isArray(data.social_links)
+        ? (data.social_links as SocialLinks)
+        : {};
+    const homepage_copy =
+      data.homepage_copy && typeof data.homepage_copy === "object" && !Array.isArray(data.homepage_copy)
+        ? ((data as { homepage_copy?: HomepageCopy | null }).homepage_copy as HomepageCopy)
+        : {};
+
+    return {
+      default_clinic_id: data.default_clinic_id as string | null,
+      website_branded_for_clinic_id: (data as { website_branded_for_clinic_id?: string | null })
+        .website_branded_for_clinic_id ?? null,
+      contact_form_recipient_email:
+        typeof (data as { contact_form_recipient_email?: string | null }).contact_form_recipient_email === "string"
+          ? ((data as { contact_form_recipient_email?: string | null }).contact_form_recipient_email as string).trim() || null
+          : null,
+      homepage_images,
+      social_links,
+      homepage_copy,
+      instagram_embed_urls,
+      gallery_image_urls,
+      welcome_video_url,
+      seo_settings,
+      website_favicon_url:
+        typeof (data as { website_favicon_url?: string | null }).website_favicon_url === "string"
+          ? ((data as { website_favicon_url?: string | null }).website_favicon_url as string).trim() || null
+          : null,
+      page_content,
+    };
+  } catch {
+    return { ...EMPTY };
+  }
 }
 
 /** Deep-merge DB page content over code defaults for a marketing page slug. */
 export function getPageContent(slug: MarketingPageSlug, pageContentMap?: MarketingPageContentMap | null) {
-  const db = pageContentMap?.[slug] as MarketingPageContent | undefined;
+  const map = pageContentMap && typeof pageContentMap === "object" && !Array.isArray(pageContentMap) ? pageContentMap : {};
+  const db = map[slug] as MarketingPageContent | undefined;
   return mergePageContent(slug, db);
 }
 
@@ -122,22 +156,24 @@ export async function getMergedPageContent(slug: MarketingPageSlug) {
   return getPageContent(slug, settings.page_content);
 }
 
-export function mergeHomepageImages(db: Record<string, string>): Record<HomepageImageKey, string> {
+export function mergeHomepageImages(db: Record<string, string> | null | undefined): Record<HomepageImageKey, string> {
+  const source = db && typeof db === "object" ? db : {};
   const out = { ...DEFAULT_HOMEPAGE_IMAGES };
   for (const key of Object.keys(DEFAULT_HOMEPAGE_IMAGES) as HomepageImageKey[]) {
-    const v = resolveMarketingImageUrl(db[key]);
+    const v = resolveMarketingImageUrl(source[key]);
     if (v) (out as Record<string, string>)[key] = v;
   }
   return out;
 }
 
 /** Resolved headline / tagline / call CTA for the public homepage. */
-export function mergeHomepageCopy(db: HomepageCopy) {
-  const line1 = db.hero_line1?.trim() || DEFAULT_HOMEPAGE_COPY.hero_line1;
-  const gradient = db.hero_gradient?.trim() || DEFAULT_HOMEPAGE_COPY.hero_gradient;
-  const tagline = db.hero_tagline?.trim() || DEFAULT_HOMEPAGE_COPY.hero_tagline;
-  const callDisplay = db.navbar_call_display?.trim() || "";
-  const callTelHref = db.navbar_call_tel_href?.trim() || "";
+export function mergeHomepageCopy(db: HomepageCopy | null | undefined) {
+  const copy = db && typeof db === "object" ? db : {};
+  const line1 = copy.hero_line1?.trim() || DEFAULT_HOMEPAGE_COPY.hero_line1;
+  const gradient = copy.hero_gradient?.trim() || DEFAULT_HOMEPAGE_COPY.hero_gradient;
+  const tagline = copy.hero_tagline?.trim() || DEFAULT_HOMEPAGE_COPY.hero_tagline;
+  const callDisplay = copy.navbar_call_display?.trim() || "";
+  const callTelHref = copy.navbar_call_tel_href?.trim() || "";
   return { line1, gradient, tagline, callDisplay, callTelHref };
 }
 

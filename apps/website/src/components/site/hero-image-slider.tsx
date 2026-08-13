@@ -5,15 +5,15 @@ import { DEFAULT_HOMEPAGE_IMAGES } from "@/lib/marketing/defaults";
 import { resolveMarketingImageUrl } from "@/lib/marketing/resolve-marketing-image-url";
 
 export function HeroImageSlider({
-  urls,
+  urls = [],
   alt,
 }: {
-  urls: string[];
+  urls?: string[] | null;
   alt: string;
 }) {
   const resolvedUrls = useMemo(
     () =>
-      urls
+      (Array.isArray(urls) ? urls : [])
         .map((url) => resolveMarketingImageUrl(url))
         .filter(Boolean),
     [urls],

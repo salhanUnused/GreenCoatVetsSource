@@ -503,7 +503,7 @@ export function getMarketingPageDef(slug: MarketingPageSlug): MarketingPageDef {
 }
 
 export function applyClinicPlaceholders(value: string, clinicName: string): string {
-  return value.replaceAll("{{clinicName}}", clinicName);
+  return String(value ?? "").split("{{clinicName}}").join(String(clinicName ?? ""));
 }
 
 export function mergePageContent(
@@ -512,30 +512,38 @@ export function mergePageContent(
 ): Required<Pick<MarketingPageContent, "seo_title" | "seo_description" | "og_image_url">> & {
   sections: Record<string, string>;
 } {
-  const defaults = DEFAULT_PAGE_CONTENT[slug];
+  const defaults = DEFAULT_PAGE_CONTENT[slug] ?? { sections: {} };
   const defaultSections = defaults.sections ?? {};
-  const dbSections = db?.sections && typeof db.sections === "object" ? db.sections : {};
+  const dbSections =
+    db?.sections && typeof db.sections === "object" && !Array.isArray(db.sections) ? db.sections : {};
   const sections: Record<string, string> = { ...defaultSections };
   for (const [key, value] of Object.entries(dbSections)) {
     if (typeof value === "string" && value.trim()) sections[key] = value;
   }
+  const seoTitle = typeof db?.seo_title === "string" ? db.seo_title.trim() : "";
+  const seoDescription = typeof db?.seo_description === "string" ? db.seo_description.trim() : "";
+  const ogImage = typeof db?.og_image_url === "string" ? db.og_image_url.trim() : "";
   return {
-    seo_title: db?.seo_title?.trim() || defaults.seo_title || "",
-    seo_description: db?.seo_description?.trim() || defaults.seo_description || "",
-    og_image_url: db?.og_image_url?.trim() || defaults.og_image_url || "",
+    seo_title: seoTitle || defaults.seo_title || "",
+    seo_description: seoDescription || defaults.seo_description || "",
+    og_image_url: ogImage || defaults.og_image_url || "",
     sections,
   };
 }
 
 export function sectionLines(sections: Record<string, string>, key: string): string[] {
-  return (sections[key] ?? "")
+  const raw = sections?.[key];
+  if (typeof raw !== "string") return [];
+  return raw
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean);
 }
 
 export function sectionParagraphs(sections: Record<string, string>, key: string): string[] {
-  return (sections[key] ?? "")
+  const raw = sections?.[key];
+  if (typeof raw !== "string") return [];
+  return raw
     .split(/\n\s*\n/)
     .map((p) => p.trim())
     .filter(Boolean);

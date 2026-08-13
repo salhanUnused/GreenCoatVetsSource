@@ -12,6 +12,8 @@ export function HomeTeamSection({
   heading: string;
   body: string;
 }) {
+  const list = Array.isArray(members) ? members : [];
+
   return (
     <section className="bg-surface-container-low py-20 sm:py-24">
       <div className="mx-auto max-w-7xl px-6">
@@ -30,9 +32,9 @@ export function HomeTeamSection({
           </Link>
         </div>
 
-        {members.length ? (
+        {list.length ? (
           <div className="flex gap-6 overflow-x-auto pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:grid sm:grid-cols-2 sm:overflow-visible md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-            {members.map((member) => (
+            {list.map((member) => (
               <article
                 key={member.id}
                 className="flex w-[9.5rem] shrink-0 flex-col items-center text-center sm:w-auto"

@@ -5,10 +5,15 @@ import {
   getMarketingLocationsOrDefaults,
   getMarketingSiteSettings,
   getPageContent,
-  mergeHomepageCopy,
   mergeHomepageImages,
 } from "@/lib/marketing/get-marketing-site";
-import { sectionLines } from "@/lib/marketing/page-content";
+import { DEFAULT_MARKETING_LOCATIONS, getDirectionsUrl } from "@/lib/marketing/default-locations";
+import {
+  applyClinicPlaceholders,
+  sectionLines,
+  sectionParagraphs,
+  sectionTitleBodyLines,
+} from "@/lib/marketing/page-content";
 import { marketingPageMetadata } from "@/lib/marketing/page-metadata";
 import { HeroImageSlider } from "@/components/site/hero-image-slider";
 import { InstagramHomeEmbeds } from "@/components/site/instagram-home-embeds";
@@ -17,9 +22,29 @@ import { HomeWelcomeVideoSection } from "@/components/site/home-welcome-video-se
 import { createClient } from "@/lib/supabase/server";
 import { getMarketingTeamMembers } from "@/lib/marketing/get-team-members";
 import { HomeTeamSection } from "@/components/site/home-team-section";
-import { getPlatformBranding } from "@/lib/platform-branding";
+import type { MarketingLocationPublic } from "@/lib/marketing/types";
 
-const WHY_ICONS = ["favorite", "event_available", "pets", "shield_with_heart", "visibility", "groups"] as const;
+const WHY_ICONS = ["stethoscope", "biotech", "pets", "medical_services", "volunteer_activism", "favorite"] as const;
+const SERVICE_ICONS = [
+  "stethoscope",
+  "orthopedics",
+  "emergency",
+  "visibility",
+  "dentistry",
+  "biotech",
+  "pets",
+  "agriculture",
+] as const;
+
+function findLocation(
+  locations: MarketingLocationPublic[],
+  patterns: RegExp[],
+): MarketingLocationPublic | undefined {
+  return locations.find((loc) => {
+    const hay = `${loc.id} ${loc.name}`.toLowerCase();
+    return patterns.some((p) => p.test(hay));
+  });
+}
 
 export async function generateMetadata() {
   const clinic = await resolveClinic();
@@ -28,71 +53,73 @@ export async function generateMetadata() {
 
 export default async function Home() {
   const clinic = await resolveClinic();
-  const [branding, marketing, publicLocations, teamMembers] = await Promise.all([
-    getPlatformBranding(),
+  const [marketing, publicLocations, teamMembers] = await Promise.all([
     getMarketingSiteSettings(),
     getMarketingLocationsOrDefaults(),
     getMarketingTeamMembers(),
   ]);
   const images = mergeHomepageImages(marketing.homepage_images);
-  const heroCopy = mergeHomepageCopy(marketing.homepage_copy);
   const heroSlides = buildHeroSlideUrls(images, marketing.homepage_images);
   const page = getPageContent("home", marketing.page_content);
   const s = page.sections;
-  const facilities = sectionLines(s, "facilities_list");
+  const t = (value: string | undefined) => applyClinicPlaceholders(value ?? "", clinic.name);
+  const serviceCards = sectionTitleBodyLines(s, "services_list");
   const faqPreview = sectionLines(s, "faq_preview_list");
-  const whyUs = [1, 2, 3, 4, 5, 6].map((n, i) => ({
-    title: s[`why_${n}_title`] ?? "",
-    body: s[`why_${n}_body`] ?? "",
-    icon: WHY_ICONS[i] ?? "pets",
-  })).filter((w) => w.title);
-  const homepageLocations = publicLocations.slice(0, 3);
+  const whyUs = [1, 2, 3, 4, 5, 6]
+    .map((n, i) => ({
+      title: s[`why_${n}_title`] ?? "",
+      body: s[`why_${n}_body`] ?? "",
+      icon: WHY_ICONS[i] ?? "pets",
+    }))
+    .filter((w) => w.title);
+  const promiseParas = sectionParagraphs(s, "promise_body").map(t);
+  const surgeryParas = sectionParagraphs(s, "surgery_body").map(t);
+  const ctaParas = sectionParagraphs(s, "cta_body").map(t);
+  const instagramUrl = marketing.social_links.instagram_url?.trim() || "https://www.instagram.com";
+  const facebookUrl = marketing.social_links.facebook_url?.trim() || "https://www.facebook.com";
+
+  const homepageLocationCards = [
+    {
+      title: t(s.loc_1_title),
+      body: t(s.loc_1_body),
+      loc:
+        findLocation(publicLocations, [/phase\s*9/, /phase-9/]) ??
+        findLocation(DEFAULT_MARKETING_LOCATIONS, [/phase\s*9/, /phase-9/]),
+    },
+    {
+      title: t(s.loc_2_title),
+      body: t(s.loc_2_body),
+      loc: findLocation(publicLocations, [/kharar/]) ?? findLocation(DEFAULT_MARKETING_LOCATIONS, [/kharar/]),
+    },
+    {
+      title: t(s.loc_3_title),
+      body: t(s.loc_3_body),
+      loc: findLocation(publicLocations, [/ropar|rupnagar/]) ?? findLocation(DEFAULT_MARKETING_LOCATIONS, [/ropar|rupnagar/]),
+    },
+  ].filter((card) => card.loc);
+
   const supabase = createClient();
-  const [{ data: services }, { data: reviews }] = await Promise.all([
-    supabase
-      .from("services")
-      .select("id, title, short_description, slug")
-      .eq("clinic_id", clinic.id)
-      .eq("is_active", true)
-      .order("title", { ascending: true })
-      .limit(6),
-    supabase
-      .from("marketing_reviews")
-      .select("id, reviewer_name, pet_name, message, stars, owner_image_url")
-      .eq("is_active", true)
-      .order("sort_order", { ascending: true })
-      .order("created_at", { ascending: true })
-      .limit(8),
-  ]);
+  const { data: reviews } = await supabase
+    .from("marketing_reviews")
+    .select("id, reviewer_name, pet_name, message, stars, owner_image_url")
+    .eq("is_active", true)
+    .order("sort_order", { ascending: true })
+    .order("created_at", { ascending: true })
+    .limit(8);
   const testimonialRows =
-    reviews?.length
-      ? reviews.map((row) => ({
-          quote: row.message as string,
-          label: `${row.pet_name} - ${row.reviewer_name}`,
-          img: (row.owner_image_url as string | null) ?? "",
-          stars: Number(row.stars ?? 5),
-        }))
-      : [
-          {
-            quote: "Thank you for doing such a great job caring for our Hurley! Such good care, really put my mind at ease. Thanks!",
-            label: "Hurley - Vikki",
-            img: "https://lh3.googleusercontent.com/aida-public/AB6AXuAXLIVwem-WWiNRC8HpPXFVnRo0P-yZIdo12_IMKZ64tgeUso48c0sEo1ybz4wN8ILmlgpVZ4UiRZHe4w_l1KqKqtsw8iYwYSEU0Kj_Uduj2egsu0-mlOFFiFKjsh5gSJ_nGh6ooZgvp3rt4vGj0Xo7QWz_a61N9hTA12kkNbVPP_zwLzi8cRm-GfZTjhJp338UxEdp18qvL44N6NutC6e194mEhOxqbXd6Th_LC0ciA5PP2hPrY_wmjdlOhNIsTFHFaWirWOLBcI4",
-            stars: 5,
-          },
-          {
-            quote: "Kind, friendly and professional - and best of all Jacky absolutely loved them. I would recommend them to anyone looking for dog care.",
-            label: "Jacky - Uday",
-            img: "https://lh3.googleusercontent.com/aida-public/AB6AXuAASNiqAa5i7M3JKCYXi4Byn3BaWf3Khqa9l0z9VWt7DIX7uAlPs7qlnFdw5519H7h5SjAxX5wlNjv-Uc6NqgtaL-jOGnRQsuo-y6K6TFSUqLeapYyg1JmNC8YiP_Hk73xYzZlGVajKZH7kQ7T6LHmE64-gre12TkuUZs8HgFogr0atwPnRKY49aN_bjC8hblSMZ3aVLHuEcJYLbW2TWVkM3w88y0Q1u9R9_7woJ9CBAjJ0QAHvIpEANHEuWUrvvXa_dmSWmNSIjCQ",
-            stars: 5,
-          },
-        ];
+    reviews?.map((row) => ({
+      quote: row.message as string,
+      label: `${row.pet_name} - ${row.reviewer_name}`,
+      img: (row.owner_image_url as string | null) ?? "",
+      stars: Number(row.stars ?? 5),
+    })) ?? [];
 
   const localBusinessLd = {
     "@context": "https://schema.org",
     "@type": "VeterinaryCare",
     name: clinic.name,
     url: "/",
-    areaServed: "Chandigarh Tricity",
+    areaServed: ["Mohali", "Kharar", "Ropar", "Chandigarh Tricity"],
   };
 
   return (
@@ -105,27 +132,24 @@ export default async function Home() {
             <div className="space-y-6 lg:space-y-8">
               <div className="inline-flex items-center gap-2 rounded-full bg-primary-fixed/20 px-4 py-2 font-label text-sm font-semibold text-on-primary-fixed-variant">
                 <span className="material-symbols-outlined text-base">pets</span>
-                {branding.product_name}
+                {t(s.hero_eyebrow)}
               </div>
               <h1 className="font-headline text-[clamp(1.75rem,4.2vw,2.75rem)] font-extrabold leading-[1.12] tracking-tight text-on-background sm:text-4xl md:text-[clamp(2rem,3.5vw,2.75rem)] lg:text-5xl">
-                {heroCopy.line1}
-                <br />
-                <span className="text-gradient">{heroCopy.gradient}</span>
+                {t(s.hero_title)}
               </h1>
-              <p className="max-w-lg text-lg leading-relaxed text-on-surface-variant">{heroCopy.tagline}</p>
+              <p className="max-w-xl text-lg leading-relaxed text-on-surface-variant">{t(s.hero_body)}</p>
               <div className="grid grid-cols-2 items-stretch gap-3 pt-2 sm:flex sm:flex-wrap sm:gap-4">
-                <Link
-                  href="/about"
-                  className="flex min-h-[3.25rem] min-w-0 items-center justify-center rounded-xl bg-surface-container-low px-3 py-2.5 text-center font-headline text-sm font-bold leading-snug text-on-surface transition-colors hover:bg-surface-container-high sm:min-h-0 sm:px-8 sm:py-4 sm:text-lg"
-                >
-                  Learn more
-                </Link>
                 <Link
                   href="/book"
                   className="gradient-primary flex min-h-[3.25rem] min-w-0 items-center justify-center rounded-xl px-3 py-2.5 text-center font-headline text-sm font-bold leading-snug text-on-primary shadow-xl shadow-primary/25 transition-transform hover:scale-[0.98] sm:min-h-0 sm:px-8 sm:py-4 sm:text-lg"
                 >
-                  <span className="sm:hidden">Book now</span>
-                  <span className="hidden sm:inline">Book an appointment</span>
+                  Book an Appointment
+                </Link>
+                <Link
+                  href="/services"
+                  className="flex min-h-[3.25rem] min-w-0 items-center justify-center rounded-xl bg-surface-container-low px-3 py-2.5 text-center font-headline text-sm font-bold leading-snug text-on-surface transition-colors hover:bg-surface-container-high sm:min-h-0 sm:px-8 sm:py-4 sm:text-lg"
+                >
+                  Explore Our Services
                 </Link>
               </div>
             </div>
@@ -141,7 +165,7 @@ export default async function Home() {
                   </div>
                   <div>
                     <div className="font-headline text-lg font-bold text-on-surface">Our promise to you</div>
-                    <div className="text-sm text-on-surface-variant">Expertise, empathy &amp; innovation</div>
+                    <div className="text-sm text-on-surface-variant">Trusted pet care across the Tricity</div>
                   </div>
                 </div>
               </div>
@@ -152,67 +176,82 @@ export default async function Home() {
         {/* Promise */}
         <section className="bg-surface-container-low py-20 sm:py-24">
           <div className="mx-auto max-w-7xl px-6">
-            <p className="font-label text-sm font-bold uppercase tracking-widest text-primary">Our promise to you…</p>
+            <p className="font-label text-sm font-bold uppercase tracking-widest text-primary">{t(s.promise_eyebrow)}</p>
             <h2 className="mt-3 font-headline text-3xl font-extrabold text-on-surface sm:text-4xl lg:text-5xl">
-              Happy pets, <span className="text-gradient">happy humans</span>
+              {t(s.promise_heading)}
             </h2>
-            <p className="mt-4 max-w-3xl text-xl font-semibold text-on-surface">Your Pet&apos;s Health, Our Passion</p>
-            <p className="mt-6 max-w-3xl text-lg leading-relaxed text-on-surface-variant">
-              {clinic.name} was born from a deep love for animals and a vision to provide Tricity with veterinary care that blends{" "}
-              <strong className="text-on-surface">expertise, empathy, and innovation</strong>. Experienced vets, modern equipment, and a
-              stress-free environment make us a trusted clinic for hundreds of pet parents.
-            </p>
+            {promiseParas.map((p) => (
+              <p key={p.slice(0, 40)} className="mt-6 max-w-3xl text-lg leading-relaxed text-on-surface-variant">
+                {p}
+              </p>
+            ))}
           </div>
         </section>
 
-        {/* Facilities */}
+        {/* Services */}
         <section className="bg-surface py-20 sm:py-24">
           <div className="mx-auto max-w-7xl px-6">
-            <h2 className="font-headline text-3xl font-extrabold text-on-surface sm:text-4xl">{s.facilities_heading}</h2>
-            <p className="mt-3 max-w-2xl text-on-surface-variant">{s.facilities_body}</p>
-            <ul className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {facilities.map((f) => (
+            <p className="font-label text-sm font-bold uppercase tracking-widest text-primary">{t(s.services_eyebrow)}</p>
+            <h2 className="mt-3 font-headline text-3xl font-extrabold text-on-surface sm:text-4xl">{t(s.services_heading)}</h2>
+            <p className="mt-3 max-w-3xl text-on-surface-variant">{t(s.services_body)}</p>
+            <ul className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+              {serviceCards.map((card, i) => (
                 <li
-                  key={f}
-                  className="flex items-center gap-3 rounded-2xl border border-outline-variant/30 bg-surface-container-lowest px-4 py-4 font-semibold text-on-surface shadow-sm"
+                  key={card.title}
+                  className="flex flex-col rounded-2xl border border-outline-variant/30 bg-surface-container-lowest p-6 shadow-sm"
                 >
-                  <span className="material-symbols-outlined text-primary" style={{ fontVariationSettings: "'FILL' 1" }}>
-                    check_circle
-                  </span>
-                  {f}
+                  <span className="material-symbols-outlined text-3xl text-primary">{SERVICE_ICONS[i] ?? "pets"}</span>
+                  <h3 className="mt-4 font-headline text-lg font-bold text-on-surface">{card.title}</h3>
+                  {card.body ? <p className="mt-2 text-sm leading-relaxed text-on-surface-variant">{card.body}</p> : null}
                 </li>
               ))}
             </ul>
-            {services?.length ? (
-              <div className="mt-12 rounded-2xl border border-outline-variant/30 bg-surface-container-low/80 p-6 backdrop-blur-sm sm:p-8">
-                <h3 className="font-headline text-lg font-bold text-on-surface">Also explore at {clinic.name}</h3>
-                <ul className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {services.map((s) => (
-                    <li key={s.id}>
-                      <Link
-                        href={`/services/${s.slug}`}
-                        className="block rounded-xl bg-surface-container-low px-4 py-3 text-sm font-semibold text-on-surface transition-colors hover:bg-primary/10 hover:text-primary"
-                      >
-                        {s.title}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
+            <div className="mt-10">
+              <Link
+                href="/services"
+                className="inline-flex h-12 items-center justify-center rounded-full bg-primary px-8 text-sm font-bold uppercase tracking-wide text-on-primary"
+              >
+                View All Services
+              </Link>
+            </div>
+          </div>
+        </section>
+
+        {/* Specialized surgery */}
+        <section className="bg-surface-container-low py-20 sm:py-24">
+          <div className="mx-auto max-w-7xl px-6">
+            <p className="font-label text-sm font-bold uppercase tracking-widest text-primary">{t(s.surgery_eyebrow)}</p>
+            <h2 className="mt-3 font-headline text-3xl font-extrabold text-on-surface sm:text-4xl">{t(s.surgery_heading)}</h2>
+            {surgeryParas.map((p) => (
+              <p key={p.slice(0, 40)} className="mt-6 max-w-3xl text-lg leading-relaxed text-on-surface-variant">
+                {p}
+              </p>
+            ))}
+            <div className="mt-10 grid gap-4 sm:grid-cols-3">
+              {[1, 2, 3].map((n) => (
+                <div
+                  key={n}
+                  className="rounded-[1.5rem] border border-outline-variant/25 bg-surface-container-lowest px-6 py-6 text-center shadow-sm"
+                >
+                  <p className="font-headline text-2xl font-extrabold text-primary sm:text-3xl">{s[`surgery_stat_${n}_value`]}</p>
+                  <p className="mt-2 text-sm font-medium text-on-surface-variant">{s[`surgery_stat_${n}_label`]}</p>
+                </div>
+              ))}
+            </div>
           </div>
         </section>
 
         {/* Why rely on us */}
-        <section className="bg-surface-container-low py-20 sm:py-24">
+        <section className="bg-surface py-20 sm:py-24">
           <div className="mx-auto max-w-7xl px-6">
-            <h2 className="font-headline text-3xl font-extrabold text-on-surface sm:text-4xl">{s.why_heading}</h2>
+            <p className="font-label text-sm font-bold uppercase tracking-widest text-primary">{t(s.why_eyebrow)}</p>
+            <h2 className="mt-3 font-headline text-3xl font-extrabold text-on-surface sm:text-4xl">{t(s.why_heading)}</h2>
             <div className="mt-10 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
               {whyUs.map((w) => (
                 <div key={w.title} className="rounded-[2rem] border border-outline-variant/25 bg-surface-container-lowest p-8 shadow-sm">
                   <span className="material-symbols-outlined text-3xl text-primary">{w.icon}</span>
                   <h3 className="mt-4 font-headline text-xl font-bold text-on-surface">{w.title}</h3>
-                  <p className="mt-3 text-on-surface-variant leading-relaxed">{w.body}</p>
+                  <p className="mt-3 leading-relaxed text-on-surface-variant">{w.body}</p>
                 </div>
               ))}
             </div>
@@ -223,19 +262,28 @@ export default async function Home() {
 
         <HomeGallerySection clinicName={clinic.name} urls={marketing.gallery_image_urls} />
 
-        <HomeTeamSection members={teamMembers} />
+        <HomeTeamSection
+          members={teamMembers}
+          eyebrow={t(s.team_eyebrow)}
+          heading={t(s.team_heading)}
+          body={t(s.team_body)}
+        />
 
-        {marketing.instagram_embed_urls.length ? (
-          <InstagramHomeEmbeds urls={marketing.instagram_embed_urls} />
-        ) : null}
+        <InstagramHomeEmbeds
+          urls={marketing.instagram_embed_urls}
+          eyebrow={t(s.instagram_eyebrow)}
+          heading={t(s.instagram_heading)}
+          body={t(s.instagram_body)}
+          profileUrl={instagramUrl}
+        />
 
         {/* Ratings */}
         <section className="bg-surface py-16 sm:py-20">
           <div className="mx-auto max-w-7xl px-6">
             <div className="flex flex-col items-start gap-6 rounded-[2rem] border border-outline-variant/30 bg-gradient-to-br from-primary/10 to-surface-container-low p-8 sm:flex-row sm:items-center sm:justify-between sm:p-10">
               <div>
-                <p className="font-label text-sm font-bold uppercase tracking-widest text-primary">Our ratings</p>
-                <p className="mt-2 font-headline text-3xl font-extrabold text-on-surface sm:text-4xl">4.8 on Google reviews</p>
+                <p className="font-label text-sm font-bold uppercase tracking-widest text-primary">{t(s.ratings_eyebrow)}</p>
+                <p className="mt-2 font-headline text-3xl font-extrabold text-on-surface sm:text-4xl">{t(s.ratings_heading)}</p>
                 <div className="mt-3 flex gap-1">
                   {[1, 2, 3, 4, 5].map((i) => (
                     <span key={i} className="material-symbols-outlined text-tertiary" style={{ fontVariationSettings: "'FILL' 1" }}>
@@ -244,72 +292,75 @@ export default async function Home() {
                   ))}
                 </div>
               </div>
-              <p className="max-w-md text-on-surface-variant">
-                Thank you to every family who shares feedback — it helps us keep improving care for pets and people.
-              </p>
+              <p className="max-w-md text-on-surface-variant">{t(s.ratings_body)}</p>
             </div>
           </div>
         </section>
 
-        {/* Testimonials */}
-        <section className="overflow-hidden bg-surface-container-low py-20 sm:py-24">
-          <div className="relative mx-auto max-w-7xl px-6">
-            <div className="mb-10 space-y-3 sm:mb-12">
-              <p className="font-label text-sm font-bold uppercase tracking-widest text-primary">Clients say</p>
-              <h2 className="font-headline text-3xl font-extrabold sm:text-4xl">WOOF — real stories</h2>
-            </div>
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-              {testimonialRows.map((t) => (
-                <div key={t.label} className="relative rounded-[2rem] bg-surface-container-lowest p-8 shadow-sm">
-                  <div className="mb-6 flex gap-0.5">
-                    {Array.from({ length: Math.max(1, Math.min(5, t.stars)) }).map((_, i) => (
-                      <span key={i} className="material-symbols-outlined text-sm text-tertiary" style={{ fontVariationSettings: "'FILL' 1" }}>
-                        star
-                      </span>
-                    ))}
-                  </div>
-                  <p className="mb-8 text-lg italic leading-relaxed text-on-surface">&ldquo;{t.quote}&rdquo;</p>
-                  <div className="flex items-center gap-4">
-                    <div className="h-12 w-12 overflow-hidden rounded-full bg-slate-200">
-                      {t.img ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={t.img} alt="" width={48} height={48} className="h-full w-full object-cover" />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center text-xs font-bold text-slate-500">N/A</div>
-                      )}
+        {/* Testimonials — real reviews only */}
+        {testimonialRows.length ? (
+          <section className="overflow-hidden bg-surface-container-low py-20 sm:py-24">
+            <div className="relative mx-auto max-w-7xl px-6">
+              <div className="mb-10 space-y-3 sm:mb-12">
+                <p className="font-label text-sm font-bold uppercase tracking-widest text-primary">{t(s.testimonials_eyebrow)}</p>
+                <h2 className="font-headline text-3xl font-extrabold sm:text-4xl">{t(s.testimonials_heading)}</h2>
+                <p className="max-w-3xl text-lg leading-relaxed text-on-surface-variant">{t(s.testimonials_intro)}</p>
+              </div>
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                {testimonialRows.map((row) => (
+                  <div key={row.label} className="relative rounded-[2rem] bg-surface-container-lowest p-8 shadow-sm">
+                    <div className="mb-6 flex gap-0.5">
+                      {Array.from({ length: Math.max(1, Math.min(5, row.stars)) }).map((_, i) => (
+                        <span key={i} className="material-symbols-outlined text-sm text-tertiary" style={{ fontVariationSettings: "'FILL' 1" }}>
+                          star
+                        </span>
+                      ))}
                     </div>
-                    <div className="font-headline font-bold text-on-surface">{t.label}</div>
+                    <p className="mb-8 text-lg italic leading-relaxed text-on-surface">&ldquo;{row.quote}&rdquo;</p>
+                    <div className="flex items-center gap-4">
+                      <div className="h-12 w-12 overflow-hidden rounded-full bg-slate-200">
+                        {row.img ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={row.img} alt="" width={48} height={48} className="h-full w-full object-cover" />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-xs font-bold text-slate-500">N/A</div>
+                        )}
+                      </div>
+                      <div className="font-headline font-bold text-on-surface">{row.label}</div>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
-        </section>
+          </section>
+        ) : null}
 
         {/* Locations */}
         <section className="bg-surface py-20 sm:py-24">
           <div className="mx-auto max-w-7xl px-6">
-            <h2 className="font-headline text-3xl font-extrabold text-on-surface sm:text-4xl">Locations</h2>
-            <p className="mt-3 text-on-surface-variant">Visit us at a branch that&apos;s convenient for you.</p>
+            <h2 className="font-headline text-3xl font-extrabold text-on-surface sm:text-4xl">{t(s.locations_heading)}</h2>
+            <p className="mt-3 max-w-3xl text-on-surface-variant">{t(s.locations_intro)}</p>
             <div className="mt-10 grid gap-8 md:grid-cols-3">
-              {homepageLocations.map((loc) => (
-                <address
-                  key={loc.id}
-                  className="not-italic rounded-[2rem] border border-outline-variant/30 bg-surface-container-low p-6 shadow-sm"
-                >
-                  <h3 className="font-headline text-lg font-bold text-primary">{loc.name}</h3>
-                  <p className="mt-4 text-sm leading-relaxed text-on-surface-variant">
-                    {loc.addressLines.map((line) => (
-                      <span key={line} className="block">
-                        {line}
-                      </span>
-                    ))}
-                  </p>
-                  <Link href="/locations" className="mt-4 inline-flex items-center gap-1 text-sm font-bold text-primary hover:underline">
-                    Directions &amp; hours <span className="material-symbols-outlined text-base">arrow_forward</span>
-                  </Link>
-                </address>
-              ))}
+              {homepageLocationCards.map((card) => {
+                const loc = card.loc!;
+                return (
+                  <address
+                    key={loc.id}
+                    className="not-italic rounded-[2rem] border border-outline-variant/30 bg-surface-container-low p-6 shadow-sm"
+                  >
+                    <h3 className="font-headline text-lg font-bold text-primary">{card.title}</h3>
+                    <p className="mt-3 text-sm leading-relaxed text-on-surface-variant">{card.body}</p>
+                    <a
+                      href={getDirectionsUrl(loc)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-4 inline-flex items-center gap-1 text-sm font-bold text-primary hover:underline"
+                    >
+                      Get Directions <span className="material-symbols-outlined text-base">arrow_forward</span>
+                    </a>
+                  </address>
+                );
+              })}
             </div>
           </div>
         </section>
@@ -325,9 +376,9 @@ export default async function Home() {
                   key={q}
                   className="flex items-start gap-3 rounded-2xl border border-outline-variant/25 bg-surface-container-lowest px-4 py-3 text-on-surface"
                 >
-                  <span className="material-symbols-outlined mt-0.5 shrink-0 text-primary text-lg">help</span>
+                  <span className="material-symbols-outlined mt-0.5 shrink-0 text-lg text-primary">help</span>
                   <span>{q}</span>
-          </li>
+                </li>
               ))}
             </ul>
             <Link
@@ -343,29 +394,34 @@ export default async function Home() {
         <section className="border-t border-outline-variant/20 bg-surface py-12">
           <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-6 px-6 sm:flex-row">
             <div className="text-center sm:text-left">
-              <p className="font-label text-sm font-bold uppercase tracking-widest text-primary">Stay connected</p>
-              <p className="mt-1 font-headline text-xl font-bold text-on-surface">Follow {clinic.name}</p>
+              <p className="font-label text-sm font-bold uppercase tracking-widest text-primary">{t(s.follow_eyebrow)}</p>
+              <p className="mt-1 font-headline text-xl font-bold text-on-surface">{t(s.follow_heading)}</p>
+              <p className="mt-2 max-w-xl text-sm leading-relaxed text-on-surface-variant">{t(s.follow_body)}</p>
             </div>
             <div className="flex flex-wrap items-center justify-center gap-4">
-              <a
-                href="https://www.instagram.com"
-            target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-2 rounded-full border border-outline-variant px-5 py-2.5 text-sm font-semibold text-on-surface transition-colors hover:border-primary hover:text-primary"
-              >
-                <span className="material-symbols-outlined text-lg">photo_camera</span>
-                Instagram
-          </a>
-          <a
-                href="https://www.facebook.com"
-            target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-2 rounded-full border border-outline-variant px-5 py-2.5 text-sm font-semibold text-on-surface transition-colors hover:border-primary hover:text-primary"
-          >
-                <span className="material-symbols-outlined text-lg">thumb_up</span>
-                Facebook
-          </a>
-        </div>
+              {instagramUrl ? (
+                <a
+                  href={instagramUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-2 rounded-full border border-outline-variant px-5 py-2.5 text-sm font-semibold text-on-surface transition-colors hover:border-primary hover:text-primary"
+                >
+                  <span className="material-symbols-outlined text-lg">photo_camera</span>
+                  Instagram
+                </a>
+              ) : null}
+              {facebookUrl ? (
+                <a
+                  href={facebookUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-2 rounded-full border border-outline-variant px-5 py-2.5 text-sm font-semibold text-on-surface transition-colors hover:border-primary hover:text-primary"
+                >
+                  <span className="material-symbols-outlined text-lg">thumb_up</span>
+                  Facebook
+                </a>
+              ) : null}
+            </div>
           </div>
         </section>
 
@@ -377,23 +433,19 @@ export default async function Home() {
             </div>
             <div className="relative z-10 space-y-6 sm:space-y-8">
               <h2 className="mx-auto max-w-4xl font-headline text-3xl font-extrabold leading-tight sm:text-4xl lg:text-5xl">
-                Book your visit today
+                {t(s.cta_heading)}
               </h2>
-              <p className="mx-auto max-w-2xl text-lg opacity-90 sm:text-xl">
-                Online booking, clear communication, and a team that treats your pet like family.
-              </p>
+              {ctaParas.map((p) => (
+                <p key={p.slice(0, 40)} className="mx-auto max-w-2xl text-lg opacity-90 sm:text-xl">
+                  {p}
+                </p>
+              ))}
               <div className="flex flex-col items-center justify-center gap-4 pt-4 sm:flex-row sm:gap-6">
                 <Link
                   href="/book"
                   className="w-full rounded-2xl bg-surface-container-lowest px-8 py-4 font-headline text-lg font-bold text-primary shadow-lg transition-colors hover:bg-surface sm:w-auto sm:px-10 sm:py-5 sm:text-xl"
                 >
-                  Book an appointment
-                </Link>
-                <Link
-                  href="/contact"
-                  className="w-full rounded-2xl border border-white/30 bg-white/10 px-8 py-4 font-headline text-lg font-bold text-white backdrop-blur-md transition-colors hover:bg-white/20 sm:w-auto sm:px-10 sm:py-5 sm:text-xl"
-                >
-                  Contact us
+                  Book an Appointment
                 </Link>
               </div>
             </div>

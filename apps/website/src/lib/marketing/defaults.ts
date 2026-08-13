@@ -40,8 +40,8 @@ export type HomepageCopy = {
 };
 
 export const DEFAULT_HOMEPAGE_COPY: Required<Pick<HomepageCopy, "hero_line1" | "hero_gradient" | "hero_tagline">> = {
-  hero_line1: "Your pet,",
-  hero_gradient: "Our priority",
+  hero_line1: "A Multi-Speciality Veterinary Hospital",
+  hero_gradient: "for Trusted Pet Care",
   hero_tagline:
-    "Happy pets, happy humans. Your pet's health, our passion — compassionate care for families across Tricity.",
+    "At GreenCoatVets, we provide complete veterinary care for pets and companion animals across Mohali and the Tricity. From everyday consultations and diagnostics to emergency care and specialized surgery, our team is here to help your pet stay healthy and feel better.",
 };

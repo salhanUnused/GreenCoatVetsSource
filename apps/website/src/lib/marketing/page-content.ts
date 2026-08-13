@@ -46,9 +46,26 @@ export const MARKETING_PAGE_DEFS: MarketingPageDef[] = [
       { key: "seo_title", label: "SEO title", type: "text" },
       { key: "seo_description", label: "SEO description", type: "textarea", rows: 3 },
       { key: "og_image_url", label: "OG / social image URL", type: "image" },
-      { key: "facilities_heading", label: "Facilities heading", type: "text" },
-      { key: "facilities_body", label: "Facilities intro", type: "textarea", rows: 3 },
-      { key: "facilities_list", label: "Facilities list (one per line)", type: "textarea", rows: 8 },
+      { key: "hero_eyebrow", label: "Hero label", type: "text" },
+      { key: "hero_title", label: "Hero heading", type: "textarea", rows: 2 },
+      { key: "hero_body", label: "Hero description", type: "textarea", rows: 4 },
+      { key: "promise_eyebrow", label: "Promise eyebrow", type: "text" },
+      { key: "promise_heading", label: "Promise heading", type: "text" },
+      { key: "promise_body", label: "Promise body", type: "textarea", rows: 5 },
+      { key: "services_eyebrow", label: "Services eyebrow", type: "text" },
+      { key: "services_heading", label: "Services heading", type: "text" },
+      { key: "services_body", label: "Services intro", type: "textarea", rows: 3 },
+      { key: "services_list", label: "Service cards (Title | description, one per line)", type: "textarea", rows: 8 },
+      { key: "surgery_eyebrow", label: "Surgery eyebrow", type: "text" },
+      { key: "surgery_heading", label: "Surgery heading", type: "text" },
+      { key: "surgery_body", label: "Surgery body", type: "textarea", rows: 5 },
+      { key: "surgery_stat_1_value", label: "Surgery stat 1 value", type: "text" },
+      { key: "surgery_stat_1_label", label: "Surgery stat 1 label", type: "text" },
+      { key: "surgery_stat_2_value", label: "Surgery stat 2 value", type: "text" },
+      { key: "surgery_stat_2_label", label: "Surgery stat 2 label", type: "text" },
+      { key: "surgery_stat_3_value", label: "Surgery stat 3 value", type: "text" },
+      { key: "surgery_stat_3_label", label: "Surgery stat 3 label", type: "text" },
+      { key: "why_eyebrow", label: "Why us eyebrow", type: "text" },
       { key: "why_heading", label: "Why us heading", type: "text" },
       { key: "why_1_title", label: "Why card 1 title", type: "text" },
       { key: "why_1_body", label: "Why card 1 body", type: "textarea", rows: 2 },
@@ -62,9 +79,34 @@ export const MARKETING_PAGE_DEFS: MarketingPageDef[] = [
       { key: "why_5_body", label: "Why card 5 body", type: "textarea", rows: 2 },
       { key: "why_6_title", label: "Why card 6 title", type: "text" },
       { key: "why_6_body", label: "Why card 6 body", type: "textarea", rows: 2 },
+      { key: "team_eyebrow", label: "Team eyebrow", type: "text" },
+      { key: "team_heading", label: "Team heading", type: "text" },
+      { key: "team_body", label: "Team intro", type: "textarea", rows: 4 },
+      { key: "instagram_eyebrow", label: "Instagram eyebrow", type: "text" },
+      { key: "instagram_heading", label: "Instagram heading", type: "text" },
+      { key: "instagram_body", label: "Instagram intro", type: "textarea", rows: 3 },
+      { key: "ratings_eyebrow", label: "Ratings eyebrow", type: "text" },
+      { key: "ratings_heading", label: "Ratings heading", type: "text" },
+      { key: "ratings_body", label: "Ratings supporting text", type: "textarea", rows: 3 },
+      { key: "testimonials_eyebrow", label: "Testimonials eyebrow", type: "text" },
+      { key: "testimonials_heading", label: "Testimonials heading", type: "text" },
+      { key: "testimonials_intro", label: "Testimonials intro", type: "textarea", rows: 3 },
+      { key: "locations_heading", label: "Locations heading", type: "text" },
+      { key: "locations_intro", label: "Locations intro", type: "textarea", rows: 3 },
+      { key: "loc_1_title", label: "Location 1 title", type: "text" },
+      { key: "loc_1_body", label: "Location 1 blurb", type: "textarea", rows: 2 },
+      { key: "loc_2_title", label: "Location 2 title", type: "text" },
+      { key: "loc_2_body", label: "Location 2 blurb", type: "textarea", rows: 2 },
+      { key: "loc_3_title", label: "Location 3 title", type: "text" },
+      { key: "loc_3_body", label: "Location 3 blurb", type: "textarea", rows: 2 },
       { key: "faq_heading", label: "FAQ teaser heading", type: "text" },
       { key: "faq_body", label: "FAQ teaser intro", type: "textarea", rows: 2 },
       { key: "faq_preview_list", label: "FAQ teaser questions (one per line)", type: "textarea", rows: 6 },
+      { key: "follow_eyebrow", label: "Follow eyebrow", type: "text" },
+      { key: "follow_heading", label: "Follow heading", type: "text" },
+      { key: "follow_body", label: "Follow intro", type: "textarea", rows: 2 },
+      { key: "cta_heading", label: "Final CTA heading", type: "text" },
+      { key: "cta_body", label: "Final CTA body", type: "textarea", rows: 4 },
     ],
   },
   {
@@ -209,35 +251,86 @@ export const MARKETING_PAGE_DEFS: MarketingPageDef[] = [
 
 export const DEFAULT_PAGE_CONTENT: Record<MarketingPageSlug, MarketingPageContent> = {
   home: {
-    seo_title: "{{clinicName}} | Your pet, Our priority",
+    seo_title: "{{clinicName}} | Multi-Speciality Veterinary Hospital",
     seo_description:
-      "Happy pets, happy humans. Expert veterinary care for Tricity — OPD, surgery, diagnostics, dentistry, grooming & boarding at {{clinicName}}.",
+      "A multi-speciality veterinary hospital for trusted pet care in Mohali and the Tricity. Consultations, diagnostics, emergency care, dental treatment, and specialized surgery at {{clinicName}}.",
     sections: {
-      facilities_heading: "Facilities",
-      facilities_body: "Complete care under one roof — tailored to what your pet needs.",
-      facilities_list: [
-        "Specialized OPD",
-        "Surgeries (major & minor)",
-        "Diagnostics",
-        "In-house path lab",
-        "Dentistry",
-        "Dermatology",
-        "Pet boarding",
-        "Grooming",
+      hero_eyebrow: "Multi-Speciality Veterinary Hospital",
+      hero_title: "A Multi-Speciality Veterinary Hospital for Trusted Pet Care",
+      hero_body:
+        "At {{clinicName}}, we provide complete veterinary care for pets and companion animals across Mohali and the Tricity. From everyday consultations and diagnostics to emergency care and specialized surgery, our team is here to help your pet stay healthy and feel better.",
+      promise_eyebrow: "Our promise to you",
+      promise_heading: "Happy pets, happy humans",
+      promise_body:
+        "Your pet's health matters to us. At {{clinicName}}, we combine experienced veterinary care, modern diagnostics and practical treatment options to give every pet the attention they need. Whether your pet needs a routine consultation, diagnostic support, dental care, surgery or emergency treatment, we focus on making veterinary care clear, comfortable and dependable for families across the Tricity.",
+      services_eyebrow: "Our services",
+      services_heading: "Complete Veterinary Care Under One Roof",
+      services_body:
+        "From routine veterinary consultations to specialized surgery and diagnostics, {{clinicName}} offers a wide range of veterinary services for pets and companion animals.",
+      services_list: [
+        "Specialized OPD | Veterinary consultations and care for your pet's everyday health needs.",
+        "Orthopedic Surgery | Specialized care for fractures, joint problems and other orthopedic conditions.",
+        "Emergency Care | Prompt veterinary care for pets facing urgent or critical conditions.",
+        "Eye Surgery | Surgical care for a range of veterinary eye conditions.",
+        "Dental Care | Dental scaling, polishing, extraction and other veterinary dental procedures.",
+        "Diagnostics | In-house pathology, ultrasound and X-ray support for accurate diagnosis.",
+        "Spay & Neuter | Experienced spay and neuter services for pets and community dogs.",
+        "Equine Services | Veterinary care for horses, including farm visits, minor surgeries and lameness care.",
       ].join("\n"),
-      why_heading: "Why rely on us?",
-      why_1_title: "We love animals",
-      why_1_body: "Your furry friend is family. They deserve the best care and attention — every single visit.",
-      why_2_title: "Convenience",
-      why_2_body: "Flexible appointment times plus online booking so scheduling fits your life.",
-      why_3_title: "Personalized care",
-      why_3_body: "Trained professionals tailor care to every pet that comes through our doors.",
-      why_4_title: "Peace of mind",
-      why_4_body: "We know leaving your pet can be stressful — we earn your trust with consistent, kind care.",
-      why_5_title: "Transparency",
-      why_5_body: "Clear communication so you feel confident we always have your pet’s best interests at heart.",
-      why_6_title: "Teamwork",
-      why_6_body: "Vets, technicians, and support staff work together for the best possible outcome.",
+      surgery_eyebrow: "Specialized surgical care",
+      surgery_heading: "Experienced Care for Complex Surgical Cases",
+      surgery_body:
+        "When your pet needs surgery, experience matters. {{clinicName}} provides specialized surgical care supported by experienced veterinary surgeons and in-house diagnostic facilities.\n\nOur team has performed 550+ orthopedic surgeries, with a reported 98% success rate. We manage a range of orthopedic conditions, including fractures, joint problems, hip conditions and other complex cases.",
+      surgery_stat_1_value: "550+",
+      surgery_stat_1_label: "Orthopedic surgeries",
+      surgery_stat_2_value: "98%",
+      surgery_stat_2_label: "Reported success rate",
+      surgery_stat_3_value: "Advanced Care",
+      surgery_stat_3_label: "For complex orthopedic cases",
+      why_eyebrow: "Why rely on us?",
+      why_heading: "Veterinary Care You Can Trust",
+      why_1_title: "Experienced Veterinary Team",
+      why_1_body:
+        "Our veterinary professionals bring experience in routine care, emergency treatment and specialized surgical cases.",
+      why_2_title: "In-House Diagnostics",
+      why_2_body:
+        "With in-house pathology, ultrasound and X-ray facilities, our team can support diagnosis and treatment decisions efficiently.",
+      why_3_title: "Personalized Treatment",
+      why_3_body:
+        "Every pet is different. We take the time to understand your pet's condition and recommend care based on their individual needs.",
+      why_4_title: "Complete Veterinary Care",
+      why_4_body:
+        "From consultations and preventive care to dental treatment, diagnostics, surgery and emergency care.",
+      why_5_title: "Care Beyond Pet Care",
+      why_5_body:
+        "Our veterinary work also includes spay and neuter services for community dogs and support for community animal welfare.",
+      why_6_title: "Kind & Compassionate Care",
+      why_6_body: "We understand that pets are family, and we treat every patient with patience, care and respect.",
+      team_eyebrow: "Our team",
+      team_heading: "People Who Care for Your Pets",
+      team_body:
+        "Behind every treatment is a team that genuinely cares about animals. Our veterinary professionals bring experience, careful attention and a practical approach to every case. From routine consultations to emergency treatment and specialized surgery, we work together to provide dependable veterinary care for pets and their families.",
+      instagram_eyebrow: "Social",
+      instagram_heading: "From Our Instagram",
+      instagram_body:
+        "See the latest from {{clinicName}} — from everyday moments at our veterinary hospital to helpful pet care information and updates from our team.",
+      ratings_eyebrow: "Our ratings",
+      ratings_heading: "4.8 on Google Reviews",
+      ratings_body:
+        "Thank you to every pet family who shares their experience with us. Your feedback helps us continue improving veterinary care for pets and their families.",
+      testimonials_eyebrow: "Clients say",
+      testimonials_heading: "WOOF — Real Stories",
+      testimonials_intro:
+        "Every pet has a story, and we're grateful to be part of so many of them. Here's what pet parents have to say about their experience with {{clinicName}}.",
+      locations_heading: "Veterinary Care Across the Tricity",
+      locations_intro:
+        "{{clinicName}} provides veterinary care across Mohali, Kharar and Ropar, making it easier for pet families across the Tricity to access experienced veterinary services.",
+      loc_1_title: "Phase 9 Clinic — Mohali",
+      loc_1_body: "Convenient veterinary care for pet families in Mohali and nearby areas.",
+      loc_2_title: "Kharar Clinic",
+      loc_2_body: "Veterinary care for pets and families in Kharar and surrounding areas.",
+      loc_3_title: "Ropar Clinic",
+      loc_3_body: "Veterinary services for pet families in Ropar and nearby areas.",
       faq_heading: "FAQ's",
       faq_body: "Quick questions — tap through for full answers on our FAQ page.",
       faq_preview_list: [
@@ -247,6 +340,13 @@ export const DEFAULT_PAGE_CONTENT: Record<MarketingPageSlug, MarketingPageConten
         "Do you have a pet pharmacy?",
         "What is IDEXX and why do you use it?",
       ].join("\n"),
+      follow_eyebrow: "Stay connected",
+      follow_heading: "Follow {{clinicName}}",
+      follow_body:
+        "Follow us for pet care tips, veterinary updates, clinic news and everyday moments from {{clinicName}}.",
+      cta_heading: "Book Your Visit Today",
+      cta_body:
+        "Whether your pet needs a routine consultation, diagnostic support, dental care, surgery or emergency treatment, our team is here to help.\n\nBook an appointment with {{clinicName}} and take the next step towards better care for your pet.",
     },
   },
   about: {
@@ -439,4 +539,13 @@ export function sectionParagraphs(sections: Record<string, string>, key: string)
     .split(/\n\s*\n/)
     .map((p) => p.trim())
     .filter(Boolean);
+}
+
+/** Parse CMS lines in `Title | body` form. */
+export function sectionTitleBodyLines(sections: Record<string, string>, key: string): { title: string; body: string }[] {
+  return sectionLines(sections, key).map((line) => {
+    const idx = line.indexOf("|");
+    if (idx === -1) return { title: line, body: "" };
+    return { title: line.slice(0, idx).trim(), body: line.slice(idx + 1).trim() };
+  });
 }

@@ -103,7 +103,7 @@ export default async function ContactPage() {
                   <p className="text-sm opacity-90">Phase 9 contact numbers will appear here when configured in Locations (admin).</p>
                 )}
               </div>
-              <div className="absolute -bottom-10 -right-10 h-40 w-40 animate-pulse rounded-full bg-error/10" />
+              <div className="absolute -bottom-10 -right-10 h-40 w-40 rounded-full bg-error/10" />
             </div>
 
             <div className="rounded-xl bg-surface-container-low p-8">

@@ -168,11 +168,11 @@ body {
   }
 
   .glass-panel {
-    background: rgba(255, 255, 255, 0.8);
-    backdrop-filter: blur(20px);
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(8px);
   }
 
-  /* Login / auth: animated backdrop */
+  /* Login / auth: static soft backdrop (animated blobs previously burned CPU continuously) */
   .login-bg-gradient {
     background: linear-gradient(
       125deg,
@@ -182,39 +182,17 @@ body {
       #e0ecf8 75%,
       #c8eadc 100%
     );
-    background-size: 400% 400%;
-    animation: login-gradient-shift 22s ease infinite;
+    background-size: 100% 100%;
   }
 
   .login-blob {
-    will-change: transform;
-    filter: blur(64px);
-  }
-
-  .login-blob-1 {
-    animation: login-float-1 28s ease-in-out infinite;
-  }
-  .login-blob-2 {
-    animation: login-float-2 32s ease-in-out infinite;
-  }
-  .login-blob-3 {
-    animation: login-float-3 24s ease-in-out infinite;
-  }
-  .login-blob-4 {
-    animation: login-float-4 36s ease-in-out infinite;
-  }
-
-  .login-orbit {
-    animation: login-orbit 48s linear infinite;
-  }
-  .login-orbit-reverse {
-    animation: login-orbit-reverse 56s linear infinite;
+    filter: blur(48px);
+    opacity: 0.85;
   }
 
   .login-dots {
     background-image: radial-gradient(circle at 1px 1px, rgba(0, 108, 80, 0.12) 1px, transparent 0);
     background-size: 28px 28px;
-    animation: login-dots-drift 80s linear infinite;
   }
 }
 

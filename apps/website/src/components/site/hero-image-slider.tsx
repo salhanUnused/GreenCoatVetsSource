@@ -34,10 +34,31 @@ export function HeroImageSlider({
 
   useEffect(() => {
     if (list.length <= 1) return;
-    const id = window.setInterval(() => {
-      setIndex((i) => (i + 1) % list.length);
-    }, 5500);
-    return () => window.clearInterval(id);
+
+    let id: number | undefined;
+    const start = () => {
+      if (id !== undefined) return;
+      id = window.setInterval(() => {
+        setIndex((i) => (i + 1) % list.length);
+      }, 5500);
+    };
+    const stop = () => {
+      if (id === undefined) return;
+      window.clearInterval(id);
+      id = undefined;
+    };
+
+    const onVisibility = () => {
+      if (document.hidden) stop();
+      else start();
+    };
+
+    if (!document.hidden) start();
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      stop();
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
   }, [list.length]);
 
   if (!list.length) return null;

@@ -59,22 +59,23 @@ export function InstagramHomeEmbeds({
   useEffect(() => {
     if (!list.length) return;
     let cancelled = false;
+    let t: number | undefined;
     const run = async () => {
       try {
         await loadEmbedScript();
         if (cancelled) return;
         window.instgrm?.Embeds.process();
-        // Second pass after layout (embed.js sometimes needs a tick)
-        requestAnimationFrame(() => window.instgrm?.Embeds.process());
       } catch {
-        /* non-fatal: embed may still render on retry */
+        /* non-fatal */
       }
     };
     void run();
-    const t = window.setTimeout(run, 400);
+    t = window.setTimeout(() => {
+      if (!cancelled) window.instgrm?.Embeds.process();
+    }, 600);
     return () => {
       cancelled = true;
-      window.clearTimeout(t);
+      if (t !== undefined) window.clearTimeout(t);
     };
   }, [list]);
 

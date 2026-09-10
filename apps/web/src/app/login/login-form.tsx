@@ -121,17 +121,17 @@ export function LoginForm({
         <div className="login-orbit-reverse h-[min(75vw,480px)] w-[min(75vw,480px)] rounded-full border border-secondary/10" />
       </div>
 
-      {/* Floating chips (lightweight “live” accents) */}
+      {/* Floating chips (static accents — no infinite pulse) */}
       <div
-        className="pointer-events-none absolute left-[8%] top-[22%] h-3 w-16 rounded-full bg-primary-container/40 shadow-sm backdrop-blur-sm animate-[pulse_4s_ease-in-out_infinite]"
+        className="pointer-events-none absolute left-[8%] top-[22%] h-3 w-16 rounded-full bg-primary-container/40 shadow-sm"
         aria-hidden
       />
       <div
-        className="pointer-events-none absolute right-[12%] top-[30%] h-2 w-12 rounded-full bg-secondary-container/50 animate-[pulse_5s_ease-in-out_infinite_1s]"
+        className="pointer-events-none absolute right-[12%] top-[30%] h-2 w-12 rounded-full bg-secondary-container/50"
         aria-hidden
       />
       <div
-        className="pointer-events-none absolute bottom-[24%] right-[18%] h-4 w-20 rounded-full bg-tertiary-fixed/40 animate-[pulse_6s_ease-in-out_infinite_0.5s]"
+        className="pointer-events-none absolute bottom-[24%] right-[18%] h-4 w-20 rounded-full bg-tertiary-fixed/40"
         aria-hidden
       />
 

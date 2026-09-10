@@ -29,7 +29,7 @@ export function BookingReminderBar() {
 
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[90] flex justify-center p-3 sm:p-4">
-      <div className="pointer-events-auto flex max-w-2xl flex-col gap-3 rounded-2xl border border-primary/25 bg-surface-container-lowest/95 px-4 py-3 shadow-2xl shadow-primary/15 backdrop-blur-md sm:flex-row sm:items-center sm:justify-between sm:gap-6 sm:px-6">
+      <div className="pointer-events-auto flex max-w-2xl flex-col gap-3 rounded-2xl border border-primary/25 bg-surface-container-lowest/98 px-4 py-3 shadow-2xl shadow-primary/15 sm:flex-row sm:items-center sm:justify-between sm:gap-6 sm:px-6">
         <div className="flex items-start gap-3">
           <span className="material-symbols-outlined mt-0.5 shrink-0 text-primary text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>
             event_available

@@ -10,7 +10,7 @@ const FOOTER_CLEARANCE_PX = 16;
 
 /**
  * Decorative site-wide scroll tracker for the public website.
- * It does not replace the native scrollbar; it mirrors page scroll with a playful paw marker.
+ * Scroll handlers are rAF-throttled; idle poses stay static to avoid continuous CPU work.
  */
 export function ScrollDogIndicator() {
   const [visible, setVisible] = useState(false);
@@ -22,6 +22,8 @@ export function ScrollDogIndicator() {
   const lastY = useRef(0);
   const moveTimer = useRef<number | undefined>(undefined);
   const sleepTimer = useRef<number | undefined>(undefined);
+  const raf = useRef<number | undefined>(undefined);
+  const latest = useRef({ visible: false, progress: 0, bottomOffset: MIN_BOTTOM_OFFSET_PX });
 
   useEffect(() => {
     const clearTimers = () => {
@@ -29,15 +31,29 @@ export function ScrollDogIndicator() {
       if (sleepTimer.current !== undefined) window.clearTimeout(sleepTimer.current);
     };
 
-    const update = () => {
+    const apply = () => {
+      raf.current = undefined;
       const doc = document.documentElement;
       const maxScroll = Math.max(doc.scrollHeight - window.innerHeight, 0);
       const y = window.scrollY;
       const footerRect = document.querySelector("footer")?.getBoundingClientRect();
       const footerOverlap = footerRect ? Math.max(window.innerHeight - footerRect.top, 0) : 0;
-      setVisible(maxScroll > 280);
-      setProgress(maxScroll > 0 ? Math.min(Math.max(y / maxScroll, 0), 1) : 0);
-      setBottomOffset(Math.max(MIN_BOTTOM_OFFSET_PX, footerOverlap + FOOTER_CLEARANCE_PX));
+      const nextVisible = maxScroll > 280;
+      const nextProgress = maxScroll > 0 ? Math.min(Math.max(y / maxScroll, 0), 1) : 0;
+      const nextBottom = Math.max(MIN_BOTTOM_OFFSET_PX, footerOverlap + FOOTER_CLEARANCE_PX);
+
+      if (latest.current.visible !== nextVisible) {
+        latest.current.visible = nextVisible;
+        setVisible(nextVisible);
+      }
+      if (Math.abs(latest.current.progress - nextProgress) > 0.002) {
+        latest.current.progress = nextProgress;
+        setProgress(nextProgress);
+      }
+      if (latest.current.bottomOffset !== nextBottom) {
+        latest.current.bottomOffset = nextBottom;
+        setBottomOffset(nextBottom);
+      }
 
       const delta = y - lastY.current;
       if (Math.abs(delta) > 1) {
@@ -51,13 +67,19 @@ export function ScrollDogIndicator() {
       lastY.current = y;
     };
 
-    update();
+    const schedule = () => {
+      if (raf.current !== undefined) return;
+      raf.current = window.requestAnimationFrame(apply);
+    };
+
+    apply();
     const initialSleep = window.setTimeout(() => setIdlePose("sleep"), 1250);
-    window.addEventListener("scroll", update, { passive: true });
-    window.addEventListener("resize", update);
+    window.addEventListener("scroll", schedule, { passive: true });
+    window.addEventListener("resize", schedule, { passive: true });
     return () => {
-      window.removeEventListener("scroll", update);
-      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", schedule);
+      window.removeEventListener("resize", schedule);
+      if (raf.current !== undefined) window.cancelAnimationFrame(raf.current);
       window.clearTimeout(initialSleep);
       clearTimers();
     };

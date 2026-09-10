@@ -50,7 +50,7 @@ export function SiteHeader({
   }, []);
 
   return (
-    <header className="fixed top-0 z-50 w-full border-b border-white/15 bg-transparent backdrop-blur-md dark:border-slate-700/20">
+    <header className="fixed top-0 z-50 w-full border-b border-white/15 bg-surface/90 backdrop-blur-sm dark:border-slate-700/20">
       <nav className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:h-20 sm:px-6 lg:px-8">
         <Link href="/" className="flex shrink-0 items-center gap-2" onClick={() => setOpen(false)}>
           {logoUrl ? (

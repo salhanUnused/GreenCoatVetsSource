@@ -59,7 +59,6 @@ export function InstagramHomeEmbeds({
   useEffect(() => {
     if (!list.length) return;
     let cancelled = false;
-    let t: number | undefined;
     const run = async () => {
       try {
         await loadEmbedScript();
@@ -70,12 +69,12 @@ export function InstagramHomeEmbeds({
       }
     };
     void run();
-    t = window.setTimeout(() => {
+    const t = window.setTimeout(() => {
       if (!cancelled) window.instgrm?.Embeds.process();
     }, 600);
     return () => {
       cancelled = true;
-      if (t !== undefined) window.clearTimeout(t);
+      window.clearTimeout(t);
     };
   }, [list]);
 

@@ -50,16 +50,28 @@ export function VisitDocumentationTabs({
   const activeTab = isVisitDocTab(tabParam) ? tabParam : defaultTab;
   const [switchingTo, setSwitchingTo] = useState<VisitDocumentationTab | null>(null);
   const [photoMountKey, setPhotoMountKey] = useState(1);
+  /** Keep panels mounted after first open so form/canvas state is not wiped. */
+  const [everOpened, setEverOpened] = useState<Record<VisitDocumentationTab, boolean>>({
+    form: true,
+    photo: false,
+    digital: false,
+  });
 
   useEffect(() => {
     setPhotoMountKey((key) => key + 1);
+    setEverOpened({ form: true, photo: false, digital: false });
   }, [visitId]);
+
+  useEffect(() => {
+    setEverOpened((prev) => (prev[activeTab] ? prev : { ...prev, [activeTab]: true }));
+  }, [activeTab]);
 
   const setTab = useCallback(
     (tab: VisitDocumentationTab) => {
       if (tab === activeTab) return;
       if (tab === "photo") {
         setPhotoMountKey((key) => key + 1);
+        setEverOpened((prev) => ({ ...prev, photo: true }));
       }
       setSwitchingTo(tab);
       const params = new URLSearchParams(searchParams.toString());
@@ -112,17 +124,41 @@ export function VisitDocumentationTabs({
         <p className="mt-2 px-2 text-[11px] text-on-surface-variant">{activeHint}</p>
       </div>
 
-      {isSwitching ? (
-        <div className="flex min-h-[280px] items-center justify-center rounded-2xl border border-outline-variant/20 bg-surface-container-lowest py-16">
-          <PawCircularLoader size="md" message={loadingMessage} />
-        </div>
-      ) : (
-        <>
-          {activeTab === "form" ? formPanel : null}
-          {activeTab === "photo" ? <div key={`photo-panel-${visitId}-${photoMountKey}`}>{photoPanel}</div> : null}
-          {activeTab === "digital" ? digitalPanel : null}
-        </>
-      )}
+      <div className="relative">
+        {isSwitching ? (
+          <div className="absolute inset-0 z-20 flex min-h-[280px] items-center justify-center rounded-2xl border border-outline-variant/20 bg-surface-container-lowest/95 py-16 backdrop-blur-[1px]">
+            <PawCircularLoader size="md" message={loadingMessage} />
+          </div>
+        ) : null}
+
+        {/* Keep structured record in the DOM so evaluation fields are not wiped when switching modes */}
+        {everOpened.form ? (
+          <div
+            className={activeTab === "form" ? "block" : "hidden"}
+            aria-hidden={activeTab !== "form"}
+          >
+            {formPanel}
+          </div>
+        ) : null}
+
+        {everOpened.photo ? (
+          <div
+            className={activeTab === "photo" ? "block" : "hidden"}
+            aria-hidden={activeTab !== "photo"}
+          >
+            <div key={`photo-panel-${visitId}-${photoMountKey}`}>{photoPanel}</div>
+          </div>
+        ) : null}
+
+        {everOpened.digital ? (
+          <div
+            className={activeTab === "digital" ? "block" : "hidden"}
+            aria-hidden={activeTab !== "digital"}
+          >
+            {digitalPanel}
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }

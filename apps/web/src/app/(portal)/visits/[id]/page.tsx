@@ -25,6 +25,7 @@ import type { VisitAppointmentContextProps } from "@/components/clinical/visit-a
 import { VisitPrescriptionBlockClient } from "@/components/clinical/visit-prescription-block-client";
 import { VisitVoiceDictation } from "@/components/clinical/visit-voice-dictation";
 import { VisitReportToolbar } from "@/components/clinical/visit-report-toolbar";
+import { VisitFormDraftGuard } from "@/components/clinical/visit-form-draft-guard";
 import { VisitSavePendingBanner } from "@/components/clinical/visit-save-pending";
 import { VisitSaveFooter } from "@/components/clinical/visit-save-footer";
 import type { MedicineCatalogEntry } from "@/lib/medicines/catalog";
@@ -461,6 +462,7 @@ export default async function VisitDetailsPage({
           action={saveVisitRecord}
           className={embed ? "space-y-3" : "space-y-6"}
         >
+          <VisitFormDraftGuard visitId={visit.id} revision={visitFormKey} />
           <input type="hidden" name="visit_id" value={visit.id} />
           <input type="hidden" name="embed" value={embed ? "1" : ""} />
           <VisitSavePendingBanner />

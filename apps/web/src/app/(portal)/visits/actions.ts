@@ -418,5 +418,47 @@ export async function uploadVisitAttachment(formData: FormData) {
   });
   if (insertError) throw new Error(insertError.message);
 
-  revalidatePath(`/visits/${visitId}`);
+  // Do not revalidatePath — that remounts the visit page and wipes unsaved structured-record fields.
+  return { ok: true as const, visitId };
+}
+
+export async function deleteVisitAttachment(formData: FormData) {
+  const attachmentId = String(formData.get("attachment_id") ?? "").trim();
+  const visitId = String(formData.get("visit_id") ?? "").trim();
+  if (!attachmentId || !visitId) {
+    throw new Error("Attachment and visit are required.");
+  }
+
+  const { clinic_id } = await getActiveMembership();
+  const supabase = createClient();
+
+  const { data: row, error: fetchError } = await supabase
+    .from("file_attachments")
+    .select("id, storage_bucket, storage_path, visit_id, clinic_id")
+    .eq("id", attachmentId)
+    .eq("clinic_id", clinic_id)
+    .eq("visit_id", visitId)
+    .maybeSingle();
+
+  if (fetchError) throw new Error(fetchError.message);
+  if (!row) throw new Error("Attachment not found.");
+
+  const bucket = (row.storage_bucket as string | null) || "medical-files";
+  const path = row.storage_path as string;
+  if (path) {
+    const { error: storageError } = await supabase.storage.from(bucket).remove([path]);
+    if (storageError) throw new Error(storageError.message);
+  }
+
+  const { error: deleteError } = await supabase
+    .from("file_attachments")
+    .delete()
+    .eq("id", attachmentId)
+    .eq("clinic_id", clinic_id)
+    .eq("visit_id", visitId);
+
+  if (deleteError) throw new Error(deleteError.message);
+
+  // Do not revalidatePath — keep in-progress visit form data intact.
+  return { ok: true as const, visitId };
 }

@@ -16,11 +16,15 @@ export function VisitAttachmentsLive({
   clinicId,
   initialAttachments,
   refreshKey = 0,
+  onDelete,
+  deleteDisabled = false,
 }: {
   visitId: string;
   clinicId: string;
   initialAttachments: VisitAttachmentRow[];
   refreshKey?: number;
+  onDelete?: (attachmentId: string) => void;
+  deleteDisabled?: boolean;
 }) {
   const [attachments, setAttachments] = useState(initialAttachments);
   const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({});
@@ -52,7 +56,7 @@ export function VisitAttachmentsLive({
       .on(
         "postgres_changes",
         {
-          event: "INSERT",
+          event: "*",
           schema: "public",
           table: "file_attachments",
           filter: `visit_id=eq.${visitId}`,
@@ -104,10 +108,28 @@ export function VisitAttachmentsLive({
               className="mb-2 max-h-40 rounded-md border border-outline-variant/10 object-contain"
             />
           ) : null}
-          <p className="font-medium">{attachment.file_name ?? "File"}</p>
-          <p className="text-on-surface-variant">
-            {attachment.mime_type ?? "-"} · {new Date(attachment.created_at).toLocaleString()}
-          </p>
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="font-medium">{attachment.file_name ?? "File"}</p>
+              <p className="text-on-surface-variant">
+                {attachment.mime_type ?? "-"} · {new Date(attachment.created_at).toLocaleString()}
+              </p>
+            </div>
+            {onDelete ? (
+              <button
+                type="button"
+                disabled={deleteDisabled}
+                className="shrink-0 rounded-md border border-red-200 bg-red-50 px-2 py-1 text-[10px] font-semibold text-red-800 hover:bg-red-100 disabled:opacity-50"
+                onClick={() => {
+                  if (window.confirm(`Delete “${attachment.file_name ?? "this file"}”?`)) {
+                    onDelete(attachment.id);
+                  }
+                }}
+              >
+                Delete
+              </button>
+            ) : null}
+          </div>
         </li>
       ))}
     </>

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { ensurePrescriptionForVisit } from "@/app/(portal)/visits/actions";
+import { ensurePrescriptionForVisit } from "@/app/(portal)/visits/ensure-prescription";
 import { getActiveMembership } from "@/lib/auth/get-active-membership";
 import { canEditInvoiceTemplate, canManageInvoices } from "@/lib/auth/invoice-access";
 import { getUserAccess } from "@/lib/auth/get-user-access";

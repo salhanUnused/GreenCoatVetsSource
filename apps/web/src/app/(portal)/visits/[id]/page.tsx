@@ -3,7 +3,8 @@ import nextDynamic from "next/dynamic";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
-import { ensurePrescriptionForVisit, saveVisitRecord } from "../actions";
+import { ensurePrescriptionForVisit } from "../ensure-prescription";
+import { saveVisitRecord } from "../actions";
 import { VisitAttachmentsSection } from "@/components/clinical/visit-attachments-section";
 import { PawCircularLoader } from "@/components/web/paw-circular-loader";
 import { createVaccinationAlertFromVisit } from "../../vaccinations/actions";
@@ -19,11 +20,8 @@ import { SubmitButton } from "@/components/web/submit-button";
 import { VisitSection } from "@/components/clinical/visit-section";
 import { OpenClinicalWindowButton } from "@/components/clinical/open-clinical-window-button";
 import { VisitDocumentationTabs } from "@/components/clinical/visit-documentation-tabs";
-import { VisitPhotoSheetReport } from "@/components/clinical/visit-photo-sheet-report";
 import { roleCanUseVisitPhoneCapture } from "@/lib/visits/phone-capture-access";
 import type { VisitAppointmentContextProps } from "@/components/clinical/visit-appointment-context";
-import { VisitPrescriptionBlockClient } from "@/components/clinical/visit-prescription-block-client";
-import { VisitVoiceDictation } from "@/components/clinical/visit-voice-dictation";
 import { VisitReportToolbar } from "@/components/clinical/visit-report-toolbar";
 import { VisitFormDraftGuard } from "@/components/clinical/visit-form-draft-guard";
 import { VisitSavePendingBanner } from "@/components/clinical/visit-save-pending";
@@ -37,18 +35,42 @@ import {
   normalizeHandwrittenVisitSheetState,
 } from "@/lib/visits/handwritten-visit-sheet";
 
+const panelLoader = (
+  <div className="flex min-h-[240px] items-center justify-center py-10">
+    <PawCircularLoader />
+  </div>
+);
+
 const VisitHandwrittenPrescription = nextDynamic(
   () =>
     import("@/components/clinical/visit-handwritten-prescription").then((m) => ({
       default: m.VisitHandwrittenPrescription,
     })),
-  {
-    loading: () => (
-      <div className="flex min-h-[240px] items-center justify-center py-10">
-        <PawCircularLoader />
-      </div>
-    ),
-  },
+  { loading: () => panelLoader },
+);
+
+const VisitPhotoSheetReport = nextDynamic(
+  () =>
+    import("@/components/clinical/visit-photo-sheet-report").then((m) => ({
+      default: m.VisitPhotoSheetReport,
+    })),
+  { loading: () => panelLoader },
+);
+
+const VisitPrescriptionBlockClient = nextDynamic(
+  () =>
+    import("@/components/clinical/visit-prescription-block-client").then((m) => ({
+      default: m.VisitPrescriptionBlockClient,
+    })),
+  { loading: () => panelLoader },
+);
+
+const VisitVoiceDictation = nextDynamic(
+  () =>
+    import("@/components/clinical/visit-voice-dictation").then((m) => ({
+      default: m.VisitVoiceDictation,
+    })),
+  { loading: () => null },
 );
 export const dynamic = "force-dynamic";
 

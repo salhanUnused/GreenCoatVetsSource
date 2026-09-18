@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 
 export type UserAccess = {
   userId: string;
+  email: string | null;
   isSuperAdmin: boolean;
   membership: {
     clinic_id: string;
@@ -52,6 +53,7 @@ export const getUserAccess = cache(async (): Promise<UserAccess> => {
 
   return {
     userId: user.id,
+    email: user.email ?? null,
     isSuperAdmin,
     membership: normalizedMembership,
   };

@@ -1,22 +1,16 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { getSessionDisplayName } from "@/lib/auth/session-display-name";
 import { createClient } from "@/lib/supabase/server";
 import { getUserAccess } from "@/lib/auth/get-user-access";
 import { AppShell } from "@/components/web/app-shell";
 import { getRoleNavGroups } from "@/lib/auth/permissions";
 import { formatInr } from "@/lib/format-currency";
+import { redirect } from "next/navigation";
 
 export default async function DashboardPage() {
   const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect("/login");
-  }
   const access = await getUserAccess();
+
   const roleLabel = access.isSuperAdmin
     ? "super_admin"
     : access.membership?.role ?? "unassigned";
@@ -41,51 +35,60 @@ export default async function DashboardPage() {
   let nextConsultationTitle = "";
   let nextConsultationSubtitle = "";
 
-  if (clinicId) {
-    const today = new Date().toISOString().slice(0, 10);
-    const monthStart = new Date();
-    monthStart.setUTCDate(1);
-    monthStart.setUTCHours(0, 0, 0, 0);
+  const today = new Date().toISOString().slice(0, 10);
+  const monthStart = new Date();
+  monthStart.setUTCDate(1);
+  monthStart.setUTCHours(0, 0, 0, 0);
 
+  const metricsPromise = clinicId
+    ? Promise.all([
+        supabase
+          .from("appointments")
+          .select("id", { count: "exact", head: true })
+          .eq("clinic_id", clinicId)
+          .gte("starts_at", `${today}T00:00:00`)
+          .lt("starts_at", `${today}T23:59:59`),
+        supabase
+          .from("pets")
+          .select("id", { count: "exact", head: true })
+          .eq("clinic_id", clinicId)
+          .eq("is_active", true),
+        supabase
+          .from("prescriptions")
+          .select("id", { count: "exact", head: true })
+          .eq("clinic_id", clinicId)
+          .gte("issued_at", `${today}T00:00:00`)
+          .lt("issued_at", `${today}T23:59:59`),
+        supabase
+          .from("orders")
+          .select("grand_total")
+          .eq("clinic_id", clinicId)
+          .eq("status", "paid")
+          .gte("placed_at", monthStart.toISOString()),
+        supabase
+          .from("appointments")
+          .select("starts_at, appointment_type, pets(name)")
+          .eq("clinic_id", clinicId)
+          .gte("starts_at", new Date().toISOString())
+          .order("starts_at", { ascending: true })
+          .limit(1)
+          .maybeSingle(),
+      ])
+    : Promise.resolve(null);
+
+  const [displayName, metrics] = await Promise.all([
+    getSessionDisplayName(supabase, access, access.email),
+    metricsPromise,
+  ]);
+
+  if (metrics) {
     const [
       appointmentsTodayRes,
       activePatientsRes,
       pendingPrescriptionsRes,
       monthlyRevenueRes,
       nextAppointmentRes,
-    ] = await Promise.all([
-      supabase
-        .from("appointments")
-        .select("id", { count: "exact", head: true })
-        .eq("clinic_id", clinicId)
-        .gte("starts_at", `${today}T00:00:00`)
-        .lt("starts_at", `${today}T23:59:59`),
-      supabase
-        .from("pets")
-        .select("id", { count: "exact", head: true })
-        .eq("clinic_id", clinicId)
-        .eq("is_active", true),
-      supabase
-        .from("prescriptions")
-        .select("id", { count: "exact", head: true })
-        .eq("clinic_id", clinicId)
-        .gte("issued_at", `${today}T00:00:00`)
-        .lt("issued_at", `${today}T23:59:59`),
-      supabase
-        .from("orders")
-        .select("grand_total")
-        .eq("clinic_id", clinicId)
-        .eq("status", "paid")
-        .gte("placed_at", monthStart.toISOString()),
-      supabase
-        .from("appointments")
-        .select("starts_at, appointment_type, pets(name)")
-        .eq("clinic_id", clinicId)
-        .gte("starts_at", new Date().toISOString())
-        .order("starts_at", { ascending: true })
-        .limit(1)
-        .maybeSingle(),
-    ]);
+    ] = metrics;
 
     appointmentsTodayText =
       appointmentsTodayRes.count !== null && appointmentsTodayRes.count !== undefined
@@ -102,7 +105,7 @@ export default async function DashboardPage() {
 
     const monthlyRevenue = (monthlyRevenueRes.data ?? []).reduce(
       (sum, row) => sum + Number(row.grand_total ?? 0),
-      0
+      0,
     );
     monthlyRevenueText = monthlyRevenue > 0 ? formatInr(monthlyRevenue) : "";
 
@@ -122,8 +125,6 @@ export default async function DashboardPage() {
     await supabase.auth.signOut();
     redirect("/login");
   }
-
-  const displayName = await getSessionDisplayName(supabase, access, user.email);
 
   return (
     <AppShell

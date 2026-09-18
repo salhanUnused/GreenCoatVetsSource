@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { redirect } from "next/navigation";
 import { getUserAccess } from "./get-user-access";
 import { createClient } from "@/lib/supabase/server";
@@ -7,7 +8,7 @@ type Membership = {
   role: string;
 };
 
-export async function getActiveMembership(): Promise<Membership> {
+export const getActiveMembership = cache(async (): Promise<Membership> => {
   const access = await getUserAccess();
   if (access.membership) {
     return access.membership;
@@ -33,4 +34,4 @@ export async function getActiveMembership(): Promise<Membership> {
     redirect("/join-clinic");
   }
   throw new Error("Unexpected access state.");
-}
+});

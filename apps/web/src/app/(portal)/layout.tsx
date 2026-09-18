@@ -13,7 +13,7 @@ import { createClient } from "@/lib/supabase/server";
  * Shared Suspense boundary via `loading.tsx` so client navigations between
  * dashboard, branches, appointments, etc. show the paw loader while RSC loads.
  */
-export default async function PortalGroupLayout({ children }: { children: ReactNode }) {
+async function PortalGates() {
   const access = await getUserAccess();
   const supabase = createClient();
   const [profile, consentRow] = await Promise.all([
@@ -26,12 +26,20 @@ export default async function PortalGroupLayout({ children }: { children: ReactN
       .maybeSingle(),
   ]);
 
-  const consentAccepted = Boolean(consentRow.data);
+  return (
+    <>
+      <ProfileGateClient profileComplete={profile.complete} />
+      <DataConsentModal initialAccepted={Boolean(consentRow.data)} />
+    </>
+  );
+}
 
+export default function PortalGroupLayout({ children }: { children: ReactNode }) {
   return (
     <ClinicalWindowsProvider>
-      <ProfileGateClient profileComplete={profile.complete} />
-      <DataConsentModal initialAccepted={consentAccepted} />
+      <Suspense fallback={null}>
+        <PortalGates />
+      </Suspense>
       {children}
       <Suspense fallback={null}>
         <ClinicalWindowsLayerLazy />

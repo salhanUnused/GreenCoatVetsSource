@@ -9,7 +9,7 @@ import {
   rescheduleOnlineConsult,
   updateAppointmentStatus,
 } from "./actions";
-import { createVisitFromAppointment } from "@/app/(portal)/visits/actions";
+import { createVisitFromAppointment } from "@/app/(portal)/visits/create-visit-from-appointment";
 import { getActiveMembership } from "@/lib/auth/get-active-membership";
 import { getUserAccess } from "@/lib/auth/get-user-access";
 import { createClient } from "@/lib/supabase/server";

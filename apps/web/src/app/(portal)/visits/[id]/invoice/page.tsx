@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { InvoiceFromVisitClient, type InvoiceDraftLine } from "./invoice-from-visit-client";
-import { ensurePrescriptionForVisit } from "@/app/(portal)/visits/actions";
+import { ensurePrescriptionForVisit } from "@/app/(portal)/visits/ensure-prescription";
 import { getActiveMembership } from "@/lib/auth/get-active-membership";
 import { canManageInvoices } from "@/lib/auth/invoice-access";
 import { getUserAccess } from "@/lib/auth/get-user-access";

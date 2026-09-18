@@ -1,5 +1,5 @@
 import { formatClinicDate } from "@saasclinics/lib";
-import dynamic from "next/dynamic";
+import nextDynamic from "next/dynamic";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
@@ -36,7 +36,7 @@ import {
   normalizeHandwrittenVisitSheetState,
 } from "@/lib/visits/handwritten-visit-sheet";
 
-const VisitHandwrittenPrescription = dynamic(
+const VisitHandwrittenPrescription = nextDynamic(
   () =>
     import("@/components/clinical/visit-handwritten-prescription").then((m) => ({
       default: m.VisitHandwrittenPrescription,

@@ -12,6 +12,7 @@ function CartChromeGate({ storeEnabled }: { storeEnabled: boolean }) {
   const [isAuthed, setIsAuthed] = useState(false);
 
   useEffect(() => {
+    if (!storeEnabled) return;
     const supabase = createClient();
     void supabase.auth.getUser().then(({ data }) => setIsAuthed(Boolean(data.user)));
     const {
@@ -20,7 +21,7 @@ function CartChromeGate({ storeEnabled }: { storeEnabled: boolean }) {
       setIsAuthed(Boolean(session?.user));
     });
     return () => subscription.unsubscribe();
-  }, []);
+  }, [storeEnabled]);
 
   if (path.startsWith("/admin")) return null;
   if (!storeEnabled) return null;
@@ -29,6 +30,15 @@ function CartChromeGate({ storeEnabled }: { storeEnabled: boolean }) {
 }
 
 export function StoreProviders({ children, storeEnabled }: { children: ReactNode; storeEnabled: boolean }) {
+  if (!storeEnabled) {
+    return (
+      <>
+        {children}
+        <WebsiteConsentModal />
+      </>
+    );
+  }
+
   return (
     <CartProvider>
       {children}

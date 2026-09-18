@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { redirect } from "next/navigation";
 import { hasValidPortalOtpCookie } from "@/lib/auth/portal-email-otp";
 import { createClient } from "@/lib/supabase/server";
@@ -11,7 +12,7 @@ export type UserAccess = {
   } | null;
 };
 
-export async function getUserAccess(): Promise<UserAccess> {
+export const getUserAccess = cache(async (): Promise<UserAccess> => {
   const supabase = createClient();
   const {
     data: { user },
@@ -54,4 +55,4 @@ export async function getUserAccess(): Promise<UserAccess> {
     isSuperAdmin,
     membership: normalizedMembership,
   };
-}
+});

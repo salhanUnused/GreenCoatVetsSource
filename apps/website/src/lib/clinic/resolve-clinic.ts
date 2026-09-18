@@ -1,5 +1,7 @@
+import { cache } from "react";
 import { headers } from "next/headers";
-import { createClient } from "@/lib/supabase/server";
+import { createPublicClient } from "@/lib/supabase/public";
+import { getMarketingSiteSettings } from "@/lib/marketing/get-marketing-site";
 
 type Clinic = {
   id: string;
@@ -34,8 +36,8 @@ function canMatchHostRouting(hostNoPort: string): boolean {
   return hostNoPort.includes(".");
 }
 
-export async function resolveClinic(): Promise<Clinic> {
-  const supabase = createClient();
+export const resolveClinic = cache(async (): Promise<Clinic> => {
+  const supabase = createPublicClient();
   const hostRaw = headers().get("host") ?? "";
   const host = normalizeHost(hostRaw);
   const subdomain = host.split(".")[0];
@@ -56,13 +58,8 @@ export async function resolveClinic(): Promise<Clinic> {
     if (clinic) return clinic;
   }
 
-  const { data: mkt } = await supabase
-    .from("marketing_site_settings")
-    .select("website_branded_for_clinic_id, default_clinic_id")
-    .eq("id", "default")
-    .maybeSingle();
-
-  const brandedId = (mkt as { website_branded_for_clinic_id?: string | null } | null)?.website_branded_for_clinic_id;
+  const mkt = await getMarketingSiteSettings();
+  const brandedId = mkt.website_branded_for_clinic_id;
   if (brandedId) {
     const { data: byBranded } = await supabase
       .from("clinics")
@@ -73,11 +70,11 @@ export async function resolveClinic(): Promise<Clinic> {
     if (byBranded) return byBranded;
   }
 
-  if (mkt?.default_clinic_id) {
+  if (mkt.default_clinic_id) {
     const { data: byDefault } = await supabase
       .from("clinics")
       .select("id, name, slug, website_store_enabled")
-      .eq("id", mkt.default_clinic_id as string)
+      .eq("id", mkt.default_clinic_id)
       .eq("is_active", true)
       .maybeSingle();
     if (byDefault) return byDefault;
@@ -94,4 +91,4 @@ export async function resolveClinic(): Promise<Clinic> {
   if (fallback) return fallback;
 
   return placeholderClinic();
-}
+});

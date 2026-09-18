@@ -19,8 +19,8 @@ import { HeroImageSlider } from "@/components/site/hero-image-slider";
 import { InstagramHomeEmbeds } from "@/components/site/instagram-home-embeds";
 import { HomeGallerySection } from "@/components/site/home-gallery-section";
 import { HomeWelcomeVideoSection } from "@/components/site/home-welcome-video-section";
-import { createClient } from "@/lib/supabase/server";
 import { getMarketingTeamMembers } from "@/lib/marketing/get-team-members";
+import { getActiveMarketingReviews } from "@/lib/marketing/get-reviews";
 import { HomeTeamSection } from "@/components/site/home-team-section";
 import type { MarketingLocationPublic } from "@/lib/marketing/types";
 
@@ -53,10 +53,11 @@ export async function generateMetadata() {
 
 export default async function Home() {
   const clinic = await resolveClinic();
-  const [marketing, publicLocations, teamMembers] = await Promise.all([
+  const [marketing, publicLocations, teamMembers, testimonialRows] = await Promise.all([
     getMarketingSiteSettings(),
     getMarketingLocationsOrDefaults(),
     getMarketingTeamMembers(),
+    getActiveMarketingReviews(8),
   ]);
   const images = mergeHomepageImages(marketing.homepage_images);
   const heroSlides = buildHeroSlideUrls(images, marketing.homepage_images ?? {});
@@ -100,27 +101,6 @@ export default async function Home() {
       loc: findLocation(publicLocations, [/ropar|rupnagar/]) ?? findLocation(DEFAULT_MARKETING_LOCATIONS, [/ropar|rupnagar/]),
     },
   ].filter((card) => card.loc);
-
-  const supabase = createClient();
-  let testimonialRows: { quote: string; label: string; img: string; stars: number }[] = [];
-  try {
-    const { data: reviews } = await supabase
-      .from("marketing_reviews")
-      .select("id, reviewer_name, pet_name, message, stars, owner_image_url")
-      .eq("is_active", true)
-      .order("sort_order", { ascending: true })
-      .order("created_at", { ascending: true })
-      .limit(8);
-    testimonialRows =
-      reviews?.map((row) => ({
-        quote: row.message as string,
-        label: `${row.pet_name} - ${row.reviewer_name}`,
-        img: (row.owner_image_url as string | null) ?? "",
-        stars: Number(row.stars ?? 5),
-      })) ?? [];
-  } catch {
-    testimonialRows = [];
-  }
 
   const localBusinessLd = {
     "@context": "https://schema.org",

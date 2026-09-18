@@ -8,11 +8,14 @@ const inter = Inter({
   subsets: ["latin"],
   variable: "--font-inter",
   display: "swap",
+  weight: ["400", "500", "600", "700"],
 });
 const manrope = Manrope({
   subsets: ["latin"],
   variable: "--font-manrope",
   display: "swap",
+  weight: ["600", "700", "800"],
+  preload: false,
 });
 
 export async function generateMetadata(): Promise<Metadata> {

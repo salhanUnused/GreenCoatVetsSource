@@ -1,4 +1,5 @@
-import { createClient } from "@/lib/supabase/server";
+import { cache } from "react";
+import { createPublicClient } from "@/lib/supabase/public";
 
 export type MarketingTeamMember = {
   id: string;
@@ -7,8 +8,8 @@ export type MarketingTeamMember = {
   image_url: string;
 };
 
-export async function getMarketingTeamMembers(): Promise<MarketingTeamMember[]> {
-  const supabase = createClient();
+export const getMarketingTeamMembers = cache(async (): Promise<MarketingTeamMember[]> => {
+  const supabase = createPublicClient();
   const { data, error } = await supabase
     .from("marketing_team_members")
     .select("id, full_name, role_title, image_url")
@@ -18,4 +19,4 @@ export async function getMarketingTeamMembers(): Promise<MarketingTeamMember[]> 
 
   if (error) return [];
   return (data ?? []) as MarketingTeamMember[];
-}
+});

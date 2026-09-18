@@ -15,9 +15,25 @@ function redirectOAuthCodeToCallback(request: NextRequest): NextResponse | null 
   return NextResponse.redirect(callback);
 }
 
+function needsSessionRefresh(pathname: string): boolean {
+  if (
+    pathname.startsWith("/login") ||
+    pathname.startsWith("/signup") ||
+    pathname.startsWith("/forgot-password") ||
+    pathname.startsWith("/reset-password")
+  ) {
+    return false;
+  }
+  return true;
+}
+
 export async function middleware(request: NextRequest) {
   const oauthRedirect = redirectOAuthCodeToCallback(request);
   if (oauthRedirect) return oauthRedirect;
+
+  if (!needsSessionRefresh(request.nextUrl.pathname)) {
+    return NextResponse.next({ request });
+  }
 
   let response = NextResponse.next({ request });
 

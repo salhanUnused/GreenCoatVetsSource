@@ -1,4 +1,5 @@
-import { createClient } from "@/lib/supabase/server";
+import { cache } from "react";
+import { createPublicClient } from "@/lib/supabase/public";
 
 export type MarketingPopupTemplate = "offer" | "community" | "reminder" | "announcement" | "generic";
 
@@ -13,8 +14,8 @@ export type MarketingPopupRow = {
   cta_href: string | null;
 };
 
-export async function getActiveMarketingPopups(): Promise<MarketingPopupRow[]> {
-  const supabase = createClient();
+export const getActiveMarketingPopups = cache(async (): Promise<MarketingPopupRow[]> => {
+  const supabase = createPublicClient();
   const { data, error } = await supabase
     .from("marketing_site_popups")
     .select("id, sort_order, template_type, title, body, image_url, cta_label, cta_href")
@@ -34,4 +35,4 @@ export async function getActiveMarketingPopups(): Promise<MarketingPopupRow[]> {
     cta_label: (r.cta_label as string | null) ?? null,
     cta_href: (r.cta_href as string | null) ?? null,
   }));
-}
+});

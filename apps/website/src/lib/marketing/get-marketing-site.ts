@@ -1,4 +1,5 @@
-import { createClient } from "@/lib/supabase/server";
+import { cache } from "react";
+import { createPublicClient } from "@/lib/supabase/public";
 import { DEFAULT_MARKETING_LOCATIONS, isSuppressedPublicLocation } from "./default-locations";
 import {
   DEFAULT_HOMEPAGE_COPY,
@@ -55,9 +56,9 @@ const EMPTY: MarketingSiteSettingsRow = {
   page_content: {},
 };
 
-export async function getMarketingSiteSettings(): Promise<MarketingSiteSettingsRow> {
+export const getMarketingSiteSettings = cache(async (): Promise<MarketingSiteSettingsRow> => {
   try {
-    const supabase = createClient();
+    const supabase = createPublicClient();
     const columns =
       "default_clinic_id, website_branded_for_clinic_id, contact_form_recipient_email, homepage_images, social_links, homepage_copy, instagram_embed_urls, gallery_image_urls, welcome_video_url, seo_settings, website_favicon_url, page_content";
     const first = await supabase.from("marketing_site_settings").select(columns).eq("id", "default").maybeSingle();
@@ -142,7 +143,7 @@ export async function getMarketingSiteSettings(): Promise<MarketingSiteSettingsR
   } catch {
     return { ...EMPTY };
   }
-}
+});
 
 /** Deep-merge DB page content over code defaults for a marketing page slug. */
 export function getPageContent(slug: MarketingPageSlug, pageContentMap?: MarketingPageContentMap | null) {
@@ -192,8 +193,8 @@ export function buildHeroSlideUrls(merged: Record<HomepageImageKey, string>, db:
   });
 }
 
-export async function getMarketingLocations(): Promise<MarketingLocationPublic[]> {
-  const supabase = createClient();
+export const getMarketingLocations = cache(async (): Promise<MarketingLocationPublic[]> => {
+  const supabase = createPublicClient();
   const { data, error } = await supabase
     .from("marketing_locations")
     .select("id, name, address_lines, phone_display, tel_href, hours_label, directions_url, latitude, longitude")
@@ -224,7 +225,7 @@ export async function getMarketingLocations(): Promise<MarketingLocationPublic[]
       })(),
     }))
     .filter((row) => !isSuppressedPublicLocation(row));
-}
+});
 
 export async function getMarketingLocationsOrDefaults(): Promise<MarketingLocationPublic[]> {
   const rows = await getMarketingLocations();

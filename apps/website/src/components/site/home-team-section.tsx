@@ -1,5 +1,23 @@
+import Image from "next/image";
 import Link from "next/link";
 import type { MarketingTeamMember } from "@/lib/marketing/get-team-members";
+
+function canOptimizeImage(src: string): boolean {
+  if (src.startsWith("/")) return true;
+  try {
+    const host = new URL(src).hostname;
+    return (
+      host === "lh3.googleusercontent.com" ||
+      host === "images.unsplash.com" ||
+      host === "greencoatvets.com" ||
+      host === "www.greencoatvets.com" ||
+      host.endsWith(".supabase.co") ||
+      host.endsWith(".supabase.in")
+    );
+  } catch {
+    return false;
+  }
+}
 
 export function HomeTeamSection({
   members,
@@ -40,13 +58,15 @@ export function HomeTeamSection({
                 className="flex w-[9.5rem] shrink-0 flex-col items-center text-center sm:w-auto"
               >
                 <div className="relative h-28 w-28 overflow-hidden rounded-full bg-surface-container-high ring-4 ring-white shadow-lg shadow-primary/10 sm:h-32 sm:w-32">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
+                  <Image
                     src={member.image_url}
                     alt={member.full_name}
                     width={128}
                     height={128}
+                    sizes="128px"
                     className="h-full w-full object-cover"
+                    loading="lazy"
+                    unoptimized={!canOptimizeImage(member.image_url)}
                   />
                 </div>
                 <h3 className="mt-4 font-headline text-base font-bold text-on-surface">{member.full_name}</h3>

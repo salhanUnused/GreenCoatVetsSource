@@ -1,4 +1,5 @@
-import { createClient } from "@/lib/supabase/server";
+import { cache } from "react";
+import { createPublicClient } from "@/lib/supabase/public";
 
 export type FooterNavLink = {
   id: string;
@@ -51,8 +52,8 @@ export const DEFAULT_FOOTER_NAV: FooterNavGroup[] = [
  * Active footer columns for the public marketing site (active links only).
  * Omits groups that have no active links.
  */
-export async function getMarketingFooterNav(): Promise<FooterNavGroup[]> {
-  const supabase = createClient();
+export const getMarketingFooterNav = cache(async (): Promise<FooterNavGroup[]> => {
+  const supabase = createPublicClient();
 
   const { data: groups, error: gErr } = await supabase
     .from("marketing_footer_groups")
@@ -111,4 +112,4 @@ export async function getMarketingFooterNav(): Promise<FooterNavGroup[]> {
   }
 
   return out;
-}
+});

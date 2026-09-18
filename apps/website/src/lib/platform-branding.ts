@@ -1,9 +1,10 @@
+import { cache } from "react";
 import { fetchPlatformBranding, type PlatformBranding } from "@saasclinics/lib";
-import { createClient } from "@/lib/supabase/server";
+import { createPublicClient } from "@/lib/supabase/public";
 
 export type { PlatformBranding };
 
-export async function getPlatformBranding(): Promise<PlatformBranding> {
-  const supabase = createClient();
+export const getPlatformBranding = cache(async (): Promise<PlatformBranding> => {
+  const supabase = createPublicClient();
   return fetchPlatformBranding(supabase);
-}
+});

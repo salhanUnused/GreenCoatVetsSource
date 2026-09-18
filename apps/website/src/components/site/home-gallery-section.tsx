@@ -1,3 +1,22 @@
+import Image from "next/image";
+
+function canOptimizeImage(src: string): boolean {
+  if (src.startsWith("/")) return true;
+  try {
+    const host = new URL(src).hostname;
+    return (
+      host === "lh3.googleusercontent.com" ||
+      host === "images.unsplash.com" ||
+      host === "greencoatvets.com" ||
+      host === "www.greencoatvets.com" ||
+      host.endsWith(".supabase.co") ||
+      host.endsWith(".supabase.in")
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function HomeGallerySection({
   clinicName,
   urls,
@@ -24,16 +43,18 @@ export function HomeGallerySection({
           {list.map((url, index) => (
             <figure
               key={`${url}-${index}`}
-              className={`overflow-hidden rounded-2xl border border-outline-variant/25 bg-surface-container-lowest shadow-sm ${
+              className={`relative overflow-hidden rounded-2xl border border-outline-variant/25 bg-surface-container-lowest shadow-sm ${
                 index % 5 === 0 ? "row-span-2 aspect-[3/4] sm:aspect-auto sm:min-h-[280px]" : "aspect-square"
               }`}
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
+              <Image
                 src={url}
                 alt={`Clinic gallery photo ${index + 1}`}
-                className="h-full w-full object-cover transition-transform duration-500 hover:scale-[1.03]"
+                fill
+                sizes="(max-width: 768px) 50vw, 25vw"
+                className="object-cover transition-transform duration-500 hover:scale-[1.03]"
                 loading="lazy"
+                unoptimized={!canOptimizeImage(url)}
               />
             </figure>
           ))}

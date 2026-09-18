@@ -63,20 +63,41 @@ export default async function RootLayout({
         ...group,
         links: group.links.filter((item) => item.href !== "/store"),
       }));
-  const faviconHref = marketing.website_favicon_url ?? "/favicon-48x48.png";
+  const faviconHref = marketing.website_favicon_url?.trim() || "/favicon-48x48.png";
+  const appleHref = marketing.website_favicon_url?.trim() || "/apple-touch-icon.png";
 
   return (
     <html lang="en" className={`scroll-smooth ${inter.variable} ${manrope.variable}`}>
       <head>
         <GoogleHeadTags />
+        <link rel="icon" href="/favicon.ico" sizes="any" />
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
         <link rel="icon" href={faviconHref} type="image/png" sizes="48x48" />
-        <link rel="shortcut icon" href={faviconHref} type="image/png" />
-        <link rel="apple-touch-icon" href={faviconHref} sizes="180x180" />
+        <link rel="apple-touch-icon" href={appleHref} sizes="180x180" />
         <link rel="sitemap" type="application/xml" title="Sitemap" href={sitemapUrl} />
+        {/* Non-blocking Material Symbols — avoids render-blocking Google CSS */}
         <link
-          rel="stylesheet"
+          rel="preload"
+          as="style"
           href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap"
         />
+        <link
+          id="material-symbols"
+          rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap"
+          media="print"
+        />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){var l=document.getElementById('material-symbols');if(!l)return;var a=function(){l.media='all'};if(l.sheet)a();else l.addEventListener('load',a);})();`,
+          }}
+        />
+        <noscript>
+          <link
+            rel="stylesheet"
+            href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap"
+          />
+        </noscript>
       </head>
       <body className={inter.className}>
         <GoogleTagManagerNoscript />

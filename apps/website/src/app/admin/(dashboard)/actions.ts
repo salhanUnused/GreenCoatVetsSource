@@ -703,8 +703,8 @@ export async function updateWebsiteFavicon(formData: FormData) {
 
   revalidatePath("/", "layout");
   revalidatePath("/");
-  revalidatePath("/icon");
-  revalidatePath("/apple-icon");
+  revalidatePath("/");
+  revalidatePath("/admin");
   revalidatePath("/admin/settings");
   redirect("/admin/settings?favicon_saved=1");
 }
@@ -721,8 +721,8 @@ export async function clearWebsiteFavicon() {
 
   revalidatePath("/", "layout");
   revalidatePath("/");
-  revalidatePath("/icon");
-  revalidatePath("/apple-icon");
+  revalidatePath("/");
+  revalidatePath("/admin");
   revalidatePath("/admin/settings");
   redirect("/admin/settings?favicon_cleared=1");
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useMemo } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 declare global {
   interface Window {
@@ -51,13 +51,35 @@ export function InstagramHomeEmbeds({
   profileUrl?: string | null;
 }) {
   const headingId = useId();
+  const sectionRef = useRef<HTMLElement | null>(null);
+  const [shouldLoad, setShouldLoad] = useState(false);
   const list = useMemo(
     () => (Array.isArray(urls) ? urls.filter((u) => typeof u === "string" && u.trim()) : []),
     [urls],
   );
 
   useEffect(() => {
-    if (!list.length) return;
+    if (!list.length || shouldLoad) return;
+    const el = sectionRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") {
+      setShouldLoad(true);
+      return;
+    }
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          setShouldLoad(true);
+          io.disconnect();
+        }
+      },
+      { rootMargin: "200px 0px" },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [list.length, shouldLoad]);
+
+  useEffect(() => {
+    if (!list.length || !shouldLoad) return;
     let cancelled = false;
     const run = async () => {
       try {
@@ -76,10 +98,10 @@ export function InstagramHomeEmbeds({
       cancelled = true;
       window.clearTimeout(t);
     };
-  }, [list]);
+  }, [list, shouldLoad]);
 
   return (
-    <section className="bg-surface py-16 sm:py-20" aria-labelledby={headingId}>
+    <section ref={sectionRef} className="bg-surface py-16 sm:py-20" aria-labelledby={headingId}>
       <div className="mx-auto max-w-7xl px-6">
         <div className="mb-8 flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
           <div className="space-y-2 text-center sm:text-left">
@@ -100,35 +122,39 @@ export function InstagramHomeEmbeds({
             </a>
           ) : null}
         </div>
-        {list.length ? (
-        <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
-          {list.map((permalink) => (
-            <div
-              key={permalink}
-              className="flex min-h-[480px] justify-center overflow-hidden rounded-[2rem] border border-outline-variant/25 bg-surface-container-lowest p-4 shadow-sm sm:min-h-[520px]"
-            >
-              <blockquote
-                className="instagram-media"
-                data-instgrm-captioned
-                data-instgrm-permalink={permalink}
-                data-instgrm-version="14"
-                style={{
-                  background: "#fff",
-                  border: 0,
-                  borderRadius: "12px",
-                  margin: "0 auto",
-                  maxWidth: "540px",
-                  minWidth: "240px",
-                  width: "100%",
-                }}
+        {list.length && shouldLoad ? (
+          <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
+            {list.map((permalink) => (
+              <div
+                key={permalink}
+                className="flex min-h-[480px] justify-center overflow-hidden rounded-[2rem] border border-outline-variant/25 bg-surface-container-lowest p-4 shadow-sm sm:min-h-[520px]"
               >
-                <a href={permalink} target="_blank" rel="noopener noreferrer" className="text-primary underline">
-                  View on Instagram
-                </a>
-              </blockquote>
-            </div>
-          ))}
-        </div>
+                <blockquote
+                  className="instagram-media"
+                  data-instgrm-captioned
+                  data-instgrm-permalink={permalink}
+                  data-instgrm-version="14"
+                  style={{
+                    background: "#fff",
+                    border: 0,
+                    borderRadius: "12px",
+                    margin: "0 auto",
+                    maxWidth: "540px",
+                    minWidth: "240px",
+                    width: "100%",
+                  }}
+                >
+                  <a href={permalink} target="_blank" rel="noopener noreferrer" className="text-primary underline">
+                    View on Instagram
+                  </a>
+                </blockquote>
+              </div>
+            ))}
+          </div>
+        ) : list.length ? (
+          <div className="grid min-h-[240px] place-items-center rounded-[2rem] border border-dashed border-outline-variant/40 bg-surface-container-low/40 text-sm text-on-surface-variant">
+            Loading Instagram…
+          </div>
         ) : null}
       </div>
     </section>

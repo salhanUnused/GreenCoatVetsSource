@@ -1,18 +1,34 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { AnalyticsBeacon } from "@/components/site/analytics-beacon";
-import { BookingFab } from "@/components/site/booking-fab";
-import { SeniorVetFab } from "@/components/site/senior-vet-fab";
 import { SiteFooter } from "@/components/site/site-footer";
 import { SiteHeader } from "@/components/site/site-header";
-import { BookingReminderBar } from "@/components/site/booking-reminder-bar";
-import { MarketingSitePopups } from "@/components/site/marketing-site-popups";
-import { ScrollDogIndicator } from "@/components/site/scroll-dog-indicator";
 import type { FooterNavGroup } from "@/lib/marketing/footer-nav";
 import type { SocialLinks } from "@/lib/marketing/defaults";
 import type { MarketingPopupRow } from "@/lib/marketing/popups";
+
+const MarketingSitePopups = dynamic(
+  () => import("@/components/site/marketing-site-popups").then((m) => m.MarketingSitePopups),
+  { ssr: false },
+);
+const ScrollDogIndicator = dynamic(
+  () => import("@/components/site/scroll-dog-indicator").then((m) => m.ScrollDogIndicator),
+  { ssr: false },
+);
+const BookingFab = dynamic(() => import("@/components/site/booking-fab").then((m) => m.BookingFab), {
+  ssr: false,
+});
+const SeniorVetFab = dynamic(
+  () => import("@/components/site/senior-vet-fab").then((m) => m.SeniorVetFab),
+  { ssr: false },
+);
+const BookingReminderBar = dynamic(
+  () => import("@/components/site/booking-reminder-bar").then((m) => m.BookingReminderBar),
+  { ssr: false },
+);
 
 export function MarketingShell({
   children,

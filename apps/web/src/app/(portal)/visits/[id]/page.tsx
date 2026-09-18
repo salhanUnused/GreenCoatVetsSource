@@ -1,4 +1,5 @@
 import { formatClinicDate } from "@saasclinics/lib";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
@@ -18,7 +19,6 @@ import { SubmitButton } from "@/components/web/submit-button";
 import { VisitSection } from "@/components/clinical/visit-section";
 import { OpenClinicalWindowButton } from "@/components/clinical/open-clinical-window-button";
 import { VisitDocumentationTabs } from "@/components/clinical/visit-documentation-tabs";
-import { VisitHandwrittenPrescription } from "@/components/clinical/visit-handwritten-prescription";
 import { VisitPhotoSheetReport } from "@/components/clinical/visit-photo-sheet-report";
 import { roleCanUseVisitPhoneCapture } from "@/lib/visits/phone-capture-access";
 import type { VisitAppointmentContextProps } from "@/components/clinical/visit-appointment-context";
@@ -36,6 +36,19 @@ import {
   normalizeHandwrittenVisitSheetState,
 } from "@/lib/visits/handwritten-visit-sheet";
 
+const VisitHandwrittenPrescription = dynamic(
+  () =>
+    import("@/components/clinical/visit-handwritten-prescription").then((m) => ({
+      default: m.VisitHandwrittenPrescription,
+    })),
+  {
+    loading: () => (
+      <div className="flex min-h-[240px] items-center justify-center py-10">
+        <PawCircularLoader />
+      </div>
+    ),
+  },
+);
 export const dynamic = "force-dynamic";
 
 function ownerDisplayName(owner: {

@@ -10,6 +10,33 @@ loadEnvConfig(repoRoot);
 
 const nextConfig = {
   transpilePackages: ["@saasclinics/lib"],
+  poweredByHeader: false,
+  images: {
+    formats: ["image/avif", "image/webp"],
+    minimumCacheTTL: 60 * 60 * 24 * 7,
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "**.supabase.co",
+        pathname: "/**",
+      },
+      {
+        protocol: "https",
+        hostname: "**.supabase.in",
+        pathname: "/**",
+      },
+      {
+        protocol: "https",
+        hostname: "greencoatvets.com",
+        pathname: "/**",
+      },
+      {
+        protocol: "https",
+        hostname: "www.greencoatvets.com",
+        pathname: "/**",
+      },
+    ],
+  },
   experimental: {
     outputFileTracingIncludes: {
       "/api/reception/walk-in-qr": [

@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   transpilePackages: ["@saasclinics/lib"],
+  poweredByHeader: false,
   async redirects() {
     return [
       { source: "/wp-admin", destination: "/", permanent: true },
@@ -14,10 +15,9 @@ const nextConfig = {
       { source: "/comments/feed/:path*", destination: "/", permanent: true },
     ];
   },
-  async rewrites() {
-    return [{ source: "/favicon.ico", destination: "/icon" }];
-  },
   images: {
+    formats: ["image/avif", "image/webp"],
+    minimumCacheTTL: 60 * 60 * 24 * 7,
     remotePatterns: [
       {
         protocol: "https",

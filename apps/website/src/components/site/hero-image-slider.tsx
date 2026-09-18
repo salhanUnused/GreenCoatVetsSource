@@ -1,8 +1,26 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { DEFAULT_HOMEPAGE_IMAGES } from "@/lib/marketing/defaults";
 import { resolveMarketingImageUrl } from "@/lib/marketing/resolve-marketing-image-url";
+
+function canOptimizeImage(src: string): boolean {
+  if (src.startsWith("/")) return true;
+  try {
+    const host = new URL(src).hostname;
+    return (
+      host === "lh3.googleusercontent.com" ||
+      host === "images.unsplash.com" ||
+      host === "greencoatvets.com" ||
+      host === "www.greencoatvets.com" ||
+      host.endsWith(".supabase.co") ||
+      host.endsWith(".supabase.in")
+    );
+  } catch {
+    return false;
+  }
+}
 
 export function HeroImageSlider({
   urls = [],
@@ -66,30 +84,37 @@ export function HeroImageSlider({
   return (
     <div className="relative w-full overflow-hidden rounded-[2rem] shadow-2xl shadow-on-surface/10 transition-transform duration-700 lg:rotate-2">
       <div className="relative h-[min(70vh,600px)] w-full">
-        {list.map((src, i) => (
-          <div
-            key={`${src}-${i}`}
-            className={`absolute inset-0 transition-opacity duration-700 ease-in-out ${i === index ? "z-10 opacity-100" : "z-0 opacity-0"}`}
-          >
-            {/* Native img so Supabase storage and any admin URL work without Next image allowlists */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={src}
-              alt={i === 0 ? alt : ""}
-              className="h-full w-full object-cover"
-              decoding="async"
-              loading={i === 0 ? "eager" : "lazy"}
-              onError={() => {
-                setFailed((prev) => {
-                  if (prev.has(src)) return prev;
-                  const next = new Set(prev);
-                  next.add(src);
-                  return next;
-                });
-              }}
-            />
-          </div>
-        ))}
+        {list.map((src, i) => {
+          const active = i === index;
+          // Only mount nearby slides to cut decode cost
+          if (!active && Math.abs(i - index) > 1 && !(index === 0 && i === list.length - 1)) {
+            return null;
+          }
+          return (
+            <div
+              key={`${src}-${i}`}
+              className={`absolute inset-0 transition-opacity duration-700 ease-in-out ${active ? "z-10 opacity-100" : "z-0 opacity-0"}`}
+            >
+              <Image
+                src={src}
+                alt={active ? alt : ""}
+                fill
+                priority={i === 0}
+                sizes="(max-width: 1024px) 100vw, 560px"
+                className="object-cover"
+                unoptimized={!canOptimizeImage(src)}
+                onError={() => {
+                  setFailed((prev) => {
+                    if (prev.has(src)) return prev;
+                    const next = new Set(prev);
+                    next.add(src);
+                    return next;
+                  });
+                }}
+              />
+            </div>
+          );
+        })}
       </div>
       {list.length > 1 ? (
         <div className="absolute bottom-4 left-1/2 z-10 flex -translate-x-1/2 gap-2">

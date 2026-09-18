@@ -2,7 +2,7 @@ import { DATA_SHARING_CONSENT_KEY } from "@saasclinics/lib";
 import type { ReactNode } from "react";
 import { Suspense } from "react";
 import { ClinicalWindowsProvider } from "@/components/clinical/clinical-windows-context";
-import { ClinicalWindowsLayer } from "@/components/clinical/clinical-windows-layer";
+import { ClinicalWindowsLayerLazy } from "@/components/clinical/clinical-windows-layer-lazy";
 import { DataConsentModal, ProfileGateClient } from "@/components/web/portal-gates-client";
 import { getProfileCompletionState } from "@/lib/auth/profile-completion";
 import { getUserAccess } from "@/lib/auth/get-user-access";
@@ -34,7 +34,7 @@ export default async function PortalGroupLayout({ children }: { children: ReactN
       <DataConsentModal initialAccepted={consentAccepted} />
       {children}
       <Suspense fallback={null}>
-        <ClinicalWindowsLayer />
+        <ClinicalWindowsLayerLazy />
       </Suspense>
     </ClinicalWindowsProvider>
   );

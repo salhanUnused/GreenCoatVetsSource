@@ -1,15 +1,14 @@
 import Script from "next/script";
 
-/** GA4 measurement ID */
+/** GA4 measurement ID — loaded lazily; prefer configuring GA4 inside GTM when possible. */
 export const GA_MEASUREMENT_ID = "G-BKSSD9RMBB";
 /** Google Tag Manager container ID */
 export const GTM_CONTAINER_ID = "GTM-PKLLKXJ3";
 
-/** gtag.js + GTM snippet for `<head>` (Next.js Script). */
+/** GTM in head (primary). GA4 gtag deferred to lazyOnload to cut main-thread contention. */
 export function GoogleHeadTags() {
   return (
     <>
-      {/* Google Tag Manager */}
       <Script id="google-tag-manager" strategy="afterInteractive">{`
         (function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
         new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
@@ -17,16 +16,15 @@ export function GoogleHeadTags() {
         'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
         })(window,document,'script','dataLayer','${GTM_CONTAINER_ID}');
       `}</Script>
-      {/* Google tag (gtag.js) */}
       <Script
         src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`}
-        strategy="afterInteractive"
+        strategy="lazyOnload"
       />
-      <Script id="google-gtag" strategy="afterInteractive">{`
+      <Script id="google-gtag" strategy="lazyOnload">{`
         window.dataLayer = window.dataLayer || [];
         function gtag(){dataLayer.push(arguments);}
         gtag('js', new Date());
-        gtag('config', '${GA_MEASUREMENT_ID}');
+        gtag('config', '${GA_MEASUREMENT_ID}', { send_page_view: true });
       `}</Script>
     </>
   );

@@ -3,7 +3,7 @@ import Link from "next/link";
 /** Static FAB — no infinite pulse rings (those kept the main thread busy on every page). */
 export function SeniorVetFab() {
   return (
-    <div className="fixed bottom-6 left-4 z-50 md:bottom-8 md:left-8">
+    <div className="fixed bottom-6 left-4 z-40 md:bottom-8 md:left-8">
       <span aria-hidden className="senior-vet-fab-pulse pointer-events-none absolute inset-0 rounded-full bg-tertiary/40" />
       <Link
         href="/book/senior-vet"
